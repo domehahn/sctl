@@ -2,6 +2,7 @@ package cli
 
 import (
 	"os"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -10,12 +11,36 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// Version is set at build time via -ldflags.
+// Version, Commit, Date are set at build time via -ldflags.
+// When installed via `go install`, they fall back to the embedded module version.
 var (
 	Version = "dev"
 	Commit  = "none"
 	Date    = "unknown"
 )
+
+func init() {
+	if Version != "dev" {
+		return
+	}
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return
+	}
+	if info.Main.Version != "" && info.Main.Version != "(devel)" {
+		Version = info.Main.Version
+	}
+	for _, s := range info.Settings {
+		switch s.Key {
+		case "vcs.revision":
+			if len(s.Value) >= 7 {
+				Commit = s.Value[:7]
+			}
+		case "vcs.time":
+			Date = s.Value
+		}
+	}
+}
 
 var (
 	globalOutput      string
