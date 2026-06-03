@@ -1,0 +1,71 @@
+# .gitlab-ci.yml für Pattern B: ein Repo pro Skill
+#
+# Tag-Konvention: v<version>  (kein Skill-Name-Prefix, da das Repo selbst
+# den Skill eindeutig identifiziert)
+# Bsp: v1.5.0
+
+stages:
+  - validate
+  - release
+
+variables:
+  SCTL_VERSION: "1.0.0"
+  # Der Skill liegt im Root des Repos
+  SKILL_DIR: "."
+
+validate:
+  stage: validate
+  before_script:
+    - curl -sSL "https://github.com/domehahn/sctl/releases/download/v${SCTL_VERSION}/sctl_${SCTL_VERSION}_linux_amd64.tar.gz"
+        | tar -xz -C /usr/local/bin sctl
+  script:
+    - sctl validate "$SKILL_DIR"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+release:
+  stage: release
+  before_script:
+    - curl -sSL "https://github.com/domehahn/sctl/releases/download/v${SCTL_VERSION}/sctl_${SCTL_VERSION}_linux_amd64.tar.gz"
+        | tar -xz -C /usr/local/bin sctl
+  script:
+    # Version aus Tag ableiten: v1.5.0 → 1.5.0
+    - VERSION="${CI_COMMIT_TAG#v}"
+
+    # Skill-Name aus skill.yaml lesen
+    - SKILL_NAME=$(grep '^name:' skill.yaml | awk '{print $2}')
+
+    - sctl validate "$SKILL_DIR"
+    - sctl package "$SKILL_DIR" --output-dir dist/ --output json | tee /tmp/pkg.json
+    - SHA256=$(jq -r '.data.sha256' /tmp/pkg.json)
+
+    # Release Asset zu GitLab hochladen
+    - |
+      curl --header "JOB-TOKEN: $CI_JOB_TOKEN" \
+           --upload-file "dist/${SKILL_NAME}-${VERSION}.zip" \
+           "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/${SKILL_NAME}/${VERSION}/${SKILL_NAME}-${VERSION}.zip"
+
+    # GitLab Release erstellen mit direktem Download-Link
+    - |
+      curl --header "JOB-TOKEN: $CI_JOB_TOKEN" \
+           --header "Content-Type: application/json" \
+           --data "{
+             \"name\": \"${SKILL_NAME} v${VERSION}\",
+             \"tag_name\": \"${CI_COMMIT_TAG}\",
+             \"description\": \"SHA256: \`${SHA256}\`\n\nAdd to agent-skills.lock:\n\`\`\`yaml\n- name: ${SKILL_NAME}\n  version: ${VERSION}\n  source: docs-skill\n  source_url: ${CI_PROJECT_URL}/-/releases/${CI_COMMIT_TAG}/downloads/${SKILL_NAME}-${VERSION}.zip\n  sha256: ${SHA256}\n\`\`\`\",
+             \"assets\": {
+               \"links\": [{
+                 \"name\": \"${SKILL_NAME}-${VERSION}.zip\",
+                 \"url\": \"${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/${SKILL_NAME}/${VERSION}/${SKILL_NAME}-${VERSION}.zip\",
+                 \"link_type\": \"package\"
+               }]
+             }
+           }" \
+           "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/releases"
+
+  artifacts:
+    paths:
+      - dist/*.zip
+    expire_in: 90 days
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v[0-9]+\.[0-9]+\.[0-9]+$/

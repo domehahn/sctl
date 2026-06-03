@@ -1,0 +1,38 @@
+# agent-skills.lock
+#
+# Dieses File ist die einzige Wahrheitsquelle darüber, welche Skill-Version
+# in diesem Projekt aktiv ist. Committen. Niemals manuell editieren —
+# immer über `sctl add` oder `sctl install` erzeugen lassen.
+#
+# source_url enthält die direkte Download-URL zum ZIP-Artefakt.
+# Dadurch funktioniert `sctl install` unabhängig davon, ob die Skills
+# in einem Monorepo oder in separaten Repos liegen.
+
+version: 1
+skills:
+
+  # Aus einem GitLab-Monorepo (Pattern A)
+  # Tag im Repo: gitlab-policy-reviewer/v1.5.0
+  - name: gitlab-policy-reviewer
+    version: 1.5.0
+    source: company-skills
+    source_url: https://gitlab.company.com/platform/agent-skills/-/releases/gitlab-policy-reviewer%2Fv1.5.0/downloads/gitlab-policy-reviewer-1.5.0.zip
+    sha256: b875cc1f70dfe77f7626fddda0cc7315643d851169cdf09a104d6233e0888ff5
+    installed_to:
+      - .claude/skills/gitlab-policy-reviewer
+      - skills/gitlab-policy-reviewer
+      - .agents/skills/gitlab-policy-reviewer
+      - .github/skills/gitlab-policy-reviewer
+
+  # Aus einem separaten GitLab-Repo (Pattern B)
+  # Tag im Repo: v2.1.0
+  - name: documentation-reviewer
+    version: 2.1.0
+    source: docs-skill
+    source_url: https://gitlab.company.com/developer-experience/documentation-reviewer/-/releases/v2.1.0/downloads/documentation-reviewer-2.1.0.zip
+    sha256: a3f9d2e1c847b605f3291e8d7a4c6b0f2e5d8a1c9b3e7f0d4a2c8b6e1f5d3a9
+    installed_to:
+      - .claude/skills/documentation-reviewer
+      - skills/documentation-reviewer
+      - .agents/skills/documentation-reviewer
+      - .github/skills/documentation-reviewer

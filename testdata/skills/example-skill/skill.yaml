@@ -1,0 +1,8 @@
+name: example-skill
+version: "1.0.0"
+description: An example skill for testing sctl.
+owners:
+  - platform-team
+compatible_with:
+  - claude-code
+  - gitlab-duo

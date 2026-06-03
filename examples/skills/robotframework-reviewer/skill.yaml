@@ -1,0 +1,8 @@
+name: robotframework-reviewer
+version: 0.8.0
+description: Reviews Robot Framework test suites for structure, keyword quality, maintainability, and CI readiness.
+owners:
+  - qa-platform
+compatible_with:
+  - claude-code
+  - gitlab-duo

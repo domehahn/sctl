@@ -1,0 +1,37 @@
+# catalog.yaml — skill registry index for a monorepo
+# Maintained alongside agent-skills.lock; updated by CI on each skill release.
+
+skills:
+  - name: gitlab-policy-reviewer
+    version: 1.5.0
+    description: Reviews GitLab security policy YAML, approval policies, and drift reports.
+    owners:
+      - platform-security
+    compatible_with:
+      - claude-code
+      - gitlab-duo
+      - github-copilot
+      - codex
+    changelog: skills/gitlab-policy-reviewer/CHANGELOG.md
+
+  - name: documentation-reviewer
+    version: 2.1.0
+    description: Reviews technical documentation for completeness, accuracy, and consistency.
+    owners:
+      - developer-experience
+    compatible_with:
+      - claude-code
+      - gitlab-duo
+      - github-copilot
+      - codex
+    changelog: skills/documentation-reviewer/CHANGELOG.md
+
+  - name: robotframework-reviewer
+    version: 0.8.0
+    description: Reviews Robot Framework test suites for structure, keyword quality, and CI readiness.
+    owners:
+      - qa-platform
+    compatible_with:
+      - claude-code
+      - gitlab-duo
+    changelog: skills/robotframework-reviewer/CHANGELOG.md

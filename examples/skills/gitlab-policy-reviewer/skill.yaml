@@ -1,0 +1,10 @@
+name: gitlab-policy-reviewer
+version: 1.5.0
+description: Reviews GitLab security policy YAML, approval policies, scan execution policies, and policy drift reports.
+owners:
+  - platform-security
+compatible_with:
+  - claude-code
+  - gitlab-duo
+  - github-copilot
+  - codex

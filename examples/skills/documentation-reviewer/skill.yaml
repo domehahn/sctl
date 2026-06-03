@@ -1,0 +1,10 @@
+name: documentation-reviewer
+version: 2.1.0
+description: Reviews technical documentation for completeness, accuracy, and consistency with the codebase.
+owners:
+  - developer-experience
+compatible_with:
+  - claude-code
+  - gitlab-duo
+  - github-copilot
+  - codex

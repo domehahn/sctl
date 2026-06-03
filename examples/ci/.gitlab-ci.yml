@@ -1,0 +1,87 @@
+stages:
+  - skills
+  - validate
+  - build
+  - release
+
+variables:
+  SCTL_VERSION: "1.0.0"
+  SCTL_CACHE_DIR: "$CI_PROJECT_DIR/.cache/sctl"
+
+# ── Install sctl once and cache it ──────────────────────────────────────────
+
+.sctl-setup: &sctl-setup
+  before_script:
+    - |
+      if ! command -v sctl &>/dev/null; then
+        curl -sSL "https://github.com/domehahn/sctl/releases/download/v${SCTL_VERSION}/sctl_${SCTL_VERSION}_linux_amd64.tar.gz" \
+          | tar -xz -C /usr/local/bin sctl
+      fi
+
+# ── Install skills from lockfile ────────────────────────────────────────────
+
+install-skills:
+  stage: skills
+  <<: *sctl-setup
+  script:
+    - sctl install --concurrency 8
+  cache:
+    key: "sctl-cache-$CI_COMMIT_REF_SLUG"
+    paths:
+      - .cache/sctl/
+  artifacts:
+    paths:
+      - skills/
+      - .agents/skills/
+      - .claude/skills/
+    expire_in: 1 hour
+  rules:
+    - changes:
+        - agent-skills.lock
+
+# ── Validate all skills in CI (on skill repo MRs) ───────────────────────────
+
+validate-skills:
+  stage: validate
+  <<: *sctl-setup
+  script:
+    - |
+      EXIT=0
+      for dir in skills/*/; do
+        echo "--- Validating $dir"
+        sctl validate "$dir" --output json | tee /tmp/result.json
+        if [ "$(jq '.success' /tmp/result.json)" != "true" ]; then
+          EXIT=1
+        fi
+      done
+      exit $EXIT
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        - skills/**/*
+
+# ── Package and publish a skill on tag ──────────────────────────────────────
+
+package-and-publish:
+  stage: release
+  <<: *sctl-setup
+  script:
+    - SKILL_NAME=$(echo "$CI_COMMIT_TAG" | cut -d'/' -f1)
+    - SKILL_VERSION=$(echo "$CI_COMMIT_TAG" | sed 's|.*/v||')
+    - sctl validate "skills/$SKILL_NAME"
+    - sctl package "skills/$SKILL_NAME" --output-dir dist/
+    - |
+      # Upload to Artifactory
+      SHA256=$(sctl package "skills/$SKILL_NAME" --output-dir /tmp --output json | jq -r '.data.sha256')
+      curl -u "$ARTIFACTORY_USER:$ARTIFACTORY_TOKEN" \
+        -T "dist/${SKILL_NAME}-${SKILL_VERSION}.zip" \
+        "$ARTIFACTORY_URL/agent-skills/${SKILL_NAME}/${SKILL_VERSION}/${SKILL_NAME}-${SKILL_VERSION}.zip"
+  artifacts:
+    paths:
+      - dist/*.zip
+    expire_in: 30 days
+  rules:
+    # Tag format: <skill-name>/v<version>  e.g. gitlab-policy-reviewer/v1.5.0
+    - if: $CI_COMMIT_TAG =~ /^[a-z0-9-]+\/v[0-9]+\.[0-9]+\.[0-9]+$/
+  environment:
+    name: skills-registry
