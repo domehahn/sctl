@@ -70,6 +70,7 @@ GitHub Copilot, and Codex. sctl installs, validates, and packages them.`,
 	root.PersistentFlags().BoolVarP(&globalVerbose, "verbose", "v", false, "Enable verbose/debug logging")
 	root.PersistentFlags().IntVar(&globalConcurrency, "concurrency", 4, "Maximum parallel downloads")
 
+	root.AddCommand(newInitCmd())
 	root.AddCommand(newInstallCmd())
 	root.AddCommand(newAddCmd())
 	root.AddCommand(newValidateCmd())
