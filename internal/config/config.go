@@ -33,12 +33,15 @@ type Config struct {
 }
 
 func Load() (*Config, error) {
-	cfg := defaults()
-
 	path, err := configPath()
 	if err != nil {
 		return nil, fmt.Errorf("resolve config path: %w", err)
 	}
+	return LoadFrom(path)
+}
+
+func LoadFrom(path string) (*Config, error) {
+	cfg := defaults()
 
 	data, err := os.ReadFile(path)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {

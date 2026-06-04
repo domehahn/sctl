@@ -3,12 +3,13 @@ package cli
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/domehahn/sctl/internal/cache"
 	"github.com/domehahn/sctl/internal/config"
 	"github.com/domehahn/sctl/internal/installer"
 	"github.com/domehahn/sctl/internal/lockfile"
+	"github.com/domehahn/sctl/internal/manifest"
+	"github.com/domehahn/sctl/internal/registry"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
@@ -18,10 +19,12 @@ func newInstallCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "install",
-		Short: "Install skills from agent-skills.lock",
-		Long: `Reads agent-skills.lock in the current directory (or --lock path),
-downloads all skills, verifies SHA256 checksums, and installs them
-atomically into the declared platform paths.`,
+		Short: "Install skills from agent-skills.lock (or resolve from agent-skills.yaml)",
+		Long: `Installs all pinned skills.
+
+If agent-skills.lock exists, installs exactly what is pinned (deterministic).
+If agent-skills.lock is missing but agent-skills.yaml exists, resolves all
+versions from the registry, generates a new agent-skills.lock, and installs.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			format := outputFormat()
 
@@ -33,16 +36,13 @@ atomically into the declared platform paths.`,
 			if lockPath == "" {
 				lockPath = lockfile.DefaultFilename
 			}
-			if _, err := os.Stat(lockPath); os.IsNotExist(err) {
-				return &UserError{Message: fmt.Sprintf("lockfile not found: %s\nRun 'sctl add <skill>' to create one.", lockPath)}
-			}
 
-			lf, err := lockfile.Read(lockPath)
+			lf, err := resolveLockfile(cmd, lockPath, cfg)
 			if err != nil {
-				return &UserError{Message: fmt.Sprintf("read lockfile: %v", err)}
+				return err
 			}
 			if len(lf.Skills) == 0 {
-				fmt.Fprintln(cmd.OutOrStdout(), "Nothing to install — lockfile is empty.")
+				fmt.Fprintln(cmd.OutOrStdout(), "Nothing to install.")
 				return nil
 			}
 
@@ -92,17 +92,101 @@ atomically into the declared platform paths.`,
 			}
 			fmt.Fprintln(cmd.OutOrStdout())
 			for _, name := range append(result.Installed, result.FromCache...) {
-				skill, _ := lf.Find(name)
-				if skill != nil {
-					fmt.Fprintf(cmd.OutOrStdout(), "  ✓ %s@%s\n", name, skill.Version)
+				sl, _ := lf.Find(name)
+				if sl != nil {
+					fmt.Fprintf(cmd.OutOrStdout(), "  ✓ %s@%s\n", name, sl.Version)
 				}
 			}
-
-			_ = filepath.Join
 			return nil
 		},
 	}
 
 	cmd.Flags().StringVar(&lockPath, "lock", "", "Path to lockfile (default: agent-skills.lock)")
 	return cmd
+}
+
+// resolveLockfile returns a ready-to-install LockFile.
+// If the lockfile exists it is read directly.
+// If it is missing but agent-skills.yaml exists, versions are resolved from
+// the registry, a new lockfile is written, and that lockfile is returned.
+func resolveLockfile(cmd *cobra.Command, lockPath string, cfg *config.Config) (*lockfile.LockFile, error) {
+	if _, err := os.Stat(lockPath); err == nil {
+		lf, err := lockfile.Read(lockPath)
+		if err != nil {
+			return nil, &UserError{Message: fmt.Sprintf("read lockfile: %v", err)}
+		}
+		return lf, nil
+	}
+
+	// lockfile missing — try manifest
+	mf, err := manifest.Read(manifest.DefaultFilename)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, &UserError{Message: fmt.Sprintf(
+				"neither %s nor %s found\nRun 'sctl init project' to get started.",
+				lockPath, manifest.DefaultFilename,
+			)}
+		}
+		return nil, &UserError{Message: fmt.Sprintf("read manifest: %v", err)}
+	}
+
+	if len(mf.Skills) == 0 {
+		lf := lockfile.New()
+		return lf, nil
+	}
+
+	fmt.Fprintf(cmd.OutOrStdout(), "agent-skills.lock not found — resolving from %s\n\n", manifest.DefaultFilename)
+
+	lf, err := resolveManifest(cmd, mf, cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := lf.Write(lockPath); err != nil {
+		return nil, &InternalError{Message: "write lockfile", Cause: err}
+	}
+	fmt.Fprintf(cmd.OutOrStdout(), "✓ Generated %s\n\n", lockPath)
+	return lf, nil
+}
+
+// resolveManifest contacts the registry for each skill entry and builds a LockFile.
+func resolveManifest(cmd *cobra.Command, mf *manifest.ManifestFile, cfg *config.Config) (*lockfile.LockFile, error) {
+	lf := lockfile.New()
+
+	for _, entry := range mf.Skills {
+		src := entry.Source
+		if src == "" {
+			src = cfg.DefaultRegistry
+		}
+		if src == "" {
+			return nil, &UserError{Message: fmt.Sprintf(
+				"skill %q has no source and no default_registry is configured", entry.Name,
+			)}
+		}
+
+		reg, err := registry.New(src, cfg)
+		if err != nil {
+			return nil, &UserError{Message: fmt.Sprintf("registry for %q: %v", entry.Name, err)}
+		}
+
+		fmt.Fprintf(cmd.OutOrStdout(), "  Resolving %s", entry.Name)
+		if entry.Version != "" {
+			fmt.Fprintf(cmd.OutOrStdout(), "@%s", entry.Version)
+		}
+		fmt.Fprintln(cmd.OutOrStdout(), " ...")
+
+		artifact, err := reg.Resolve(cmd.Context(), entry.Name, entry.Version)
+		if err != nil {
+			return nil, &UserError{Message: fmt.Sprintf("resolve %s: %v", entry.Name, err)}
+		}
+
+		lf.Upsert(lockfile.SkillLock{
+			Name:      entry.Name,
+			Version:   artifact.Version,
+			Source:    src,
+			SourceURL: artifact.DownloadURL,
+			SHA256:    artifact.SHA256,
+		})
+	}
+	return lf, nil
 }

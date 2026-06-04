@@ -16,6 +16,7 @@ Agent skills are SKILL.md files that give coding assistants domain-specific know
 - **Reproducible** — any CI run installs the exact same bytes
 - **Multi-platform** — one install writes to all compatible platform paths automatically
 - **Auditable** — every artifact is verified before it touches disk
+- **Recoverable** — deleted lockfile? `sctl install` regenerates it from `agent-skills.yaml`
 
 ---
 
@@ -32,26 +33,148 @@ Or download a pre-built binary from the [releases page](https://github.com/domeh
 ## Quick Start
 
 ```bash
-# Add a skill from a registry
+# 1 — set up sctl for the first time
+sctl init config
+
+# 2 — initialize a project
+sctl init project
+
+# 3 — add skills
 sctl add gitlab-policy-reviewer@1.5.0 --source myregistry
+sctl add documentation-reviewer       --source myregistry
 
-# Install all skills pinned in the lockfile
+# 4 — commit both files
+git add agent-skills.yaml agent-skills.lock
+git commit -m "add agent skills"
+
+# 5 — any machine, any time
 sctl install
+```
 
-# Validate a skill before shipping it
-sctl validate ./skills/gitlab-policy-reviewer
+---
 
-# Package a skill into a distributable ZIP
-sctl package ./skills/gitlab-policy-reviewer
+## Two-File Model
+
+`sctl` uses two files, both committed to Git — similar to Poetry:
+
+| File | Analogy | Purpose |
+| --- | --- | --- |
+| `agent-skills.yaml` | `pyproject.toml` | Manifest: which skills you want (human-edited) |
+| `agent-skills.lock` | `poetry.lock` | Lockfile: exact versions + SHA256 (generated) |
+
+`sctl install` behaviour:
+
+- **Lockfile present** → installs exactly what is pinned (fast, deterministic)
+- **Lockfile missing**, manifest present → resolves versions from registry, generates lockfile, installs
+- **Both missing** → error with instructions
+
+This means a deleted lockfile is never a problem: `sctl install` regenerates it from `agent-skills.yaml` automatically.
+
+**`agent-skills.yaml`** (what you declare):
+
+```yaml
+version: 1
+skills:
+  - name: gitlab-policy-reviewer
+    version: 1.5.0
+    source: myregistry
+  - name: documentation-reviewer
+    source: myregistry   # no version = latest
+```
+
+**`agent-skills.lock`** (what gets installed — never edit manually):
+
+```yaml
+version: 1
+skills:
+  - name: gitlab-policy-reviewer
+    version: 1.5.0
+    source: myregistry
+    source_url: https://artifactory.company.com/agent-skills/gitlab-policy-reviewer/1.5.0/gitlab-policy-reviewer-1.5.0.zip
+    sha256: b875cc1f70dfe77f7626fddda0cc7315643d851169cdf09a104d6233e0888ff5
+    installed_to:
+      - .claude/skills/gitlab-policy-reviewer
+      - skills/gitlab-policy-reviewer
+      - .agents/skills/gitlab-policy-reviewer
 ```
 
 ---
 
 ## Commands
 
+### `sctl init`
+
+Scaffold sctl configuration and project files interactively.
+
+#### `sctl init config`
+
+Creates `~/.config/sctl/config.yaml` via an interactive wizard.
+
+```
+sctl init config [--force]
+```
+
+Asks for registry type, URL, project path, and token (masked input). Running it again without `--force` is a no-op if the file already exists.
+
+#### `sctl init project`
+
+Creates `agent-skills.yaml`, `agent-skills.lock`, and updates `.gitignore`.
+
+```
+sctl init project [--force]
+```
+
+The `.gitignore` update excludes installed skill directories (generated artifacts) and adds a comment that both `agent-skills.yaml` and `agent-skills.lock` must be committed.
+
+#### `sctl init skill <name>`
+
+Scaffolds a complete, immediately valid skill directory.
+
+```
+sctl init skill my-skill
+sctl init skill my-skill --output-dir ./skills
+```
+
+Asks for description, version, owner, and compatible platforms. The generated skill passes `sctl validate` out of the box.
+
+---
+
+### `sctl config`
+
+Inspect and validate the sctl configuration.
+
+#### `sctl config validate`
+
+Validates `~/.config/sctl/config.yaml`.
+
+```
+sctl config validate
+sctl config validate --path ./custom-config.yaml
+```
+
+Checks:
+
+- File is valid YAML
+- `default_registry` references a defined registry entry
+- Every registry has a known `type` (`github`, `gitlab`, `artifactory`, `local`)
+- `gitlab` registries have `project` set in `namespace/project` format
+- `github` registries have `url` in `owner/repo` format (not a full URL)
+- `artifactory` registries have `url` in `<base-url>#<repo-name>` format
+
+#### `sctl config show`
+
+Prints the resolved config with all environment variable overrides applied. Tokens are masked as `***`.
+
+```
+sctl config show
+sctl config show --output json
+```
+
+---
+
 ### `sctl install`
 
-Reads `agent-skills.lock` and installs all pinned skills.
+Installs all skills. Generates `agent-skills.lock` from `agent-skills.yaml` if the lockfile is missing.
 
 ```
 sctl install [--lock <path>] [--dry-run] [--concurrency N]
@@ -66,24 +189,28 @@ sctl install [--lock <path>] [--dry-run] [--concurrency N]
 **Platform paths installed per `compatible_with`:**
 
 | Platform | Path |
-|---|---|
+| --- | --- |
 | `claude-code` | `.claude/skills/<name>/` |
 | `gitlab-duo` | `skills/<name>/` and `.agents/skills/<name>/` |
 | `github-copilot` | `.github/skills/<name>/` |
 | `codex` | `.agents/skills/<name>/` |
 
+---
+
 ### `sctl add <skill[@version]>`
 
-Resolves, downloads, and installs a skill, then writes `agent-skills.lock`.
+Resolves, downloads, and installs a skill, then updates both `agent-skills.yaml` and `agent-skills.lock`.
 
 ```
 sctl add gitlab-policy-reviewer@1.5.0 --source myregistry
-sctl add documentation-reviewer       --source github
+sctl add documentation-reviewer       --source myregistry
 ```
 
 - Version defaults to latest if omitted
 - Reads `compatible_with` from the artifact's `skill.yaml` to determine install paths
-- Creates or updates `agent-skills.lock` atomically
+- Creates or updates both files atomically
+
+---
 
 ### `sctl validate [path]`
 
@@ -95,6 +222,7 @@ sctl validate --output json
 ```
 
 Checks:
+
 - `SKILL.md` exists and is non-empty
 - `VERSION` contains a valid semver string
 - `skill.yaml` has required fields (`name`, `version`, `compatible_with`); `version` matches `VERSION`
@@ -102,6 +230,8 @@ Checks:
 - `CHANGELOG.md` contains an entry for the current version (warning if missing)
 
 Exits `0` if valid, `1` if errors are found. Warnings do not fail the check.
+
+---
 
 ### `sctl package [path]`
 
@@ -114,8 +244,10 @@ sctl package ./skills/gitlab-policy-reviewer --output-dir ./dist
 
 - Runs `validate` first — packaging fails if the skill is invalid
 - Creates `<name>-<version>.zip` containing all skill files plus `manifest.json`
-- Prints the SHA256 of the ZIP — paste this into your lockfile or registry configuration
+- Prints the SHA256 of the ZIP — paste this into your registry configuration
 - Excludes `.git/`, `*.tmp`, `*.part`
+
+---
 
 ### `sctl version`
 
@@ -129,7 +261,7 @@ sctl version --output json
 ## Global Flags
 
 | Flag | Default | Description |
-|---|---|---|
+| --- | --- | --- |
 | `--output` | `text` | Output format: `text` or `json` |
 | `--dry-run` | `false` | Print planned actions without writing files |
 | `--verbose` | `false` | Enable debug logging to stderr |
@@ -139,22 +271,47 @@ All commands support `--output json` for machine-readable output — useful in C
 
 ---
 
-## Lockfile
+## Typical Workflows
 
-`agent-skills.lock` is the source of truth for which skill version is active in a project. Commit it.
+### First-time setup
 
-```yaml
-version: 1
-skills:
-  - name: gitlab-policy-reviewer
-    version: 1.5.0
-    source: myregistry
-    source_url: https://artifactory.company.com/agent-skills/gitlab-policy-reviewer/1.5.0/gitlab-policy-reviewer-1.5.0.zip
-    sha256: b875cc1f70dfe77f7626fddda0cc7315643d851169cdf09a104d6233e0888ff5
-    installed_to:
-      - .claude/skills/gitlab-policy-reviewer
-      - skills/gitlab-policy-reviewer
-      - .agents/skills/gitlab-policy-reviewer
+```bash
+sctl init config      # create ~/.config/sctl/config.yaml
+sctl config validate  # verify it's correct
+```
+
+### Start a new project
+
+```bash
+sctl init project                                          # agent-skills.yaml + agent-skills.lock + .gitignore
+sctl add gitlab-policy-reviewer@1.5.0 --source myregistry # updates both files, installs skill
+sctl add documentation-reviewer       --source myregistry
+git add agent-skills.yaml agent-skills.lock .gitignore
+git commit -m "add agent skills"
+```
+
+### Install on a new machine or in CI
+
+```bash
+git clone <repo>
+sctl install          # reads agent-skills.lock, installs everything
+```
+
+### Recover a deleted lockfile
+
+```bash
+rm agent-skills.lock  # oops
+sctl install          # regenerates agent-skills.lock from agent-skills.yaml, then installs
+```
+
+### Author and publish a new skill
+
+```bash
+sctl init skill my-skill --output-dir ./skills
+# edit skills/my-skill/SKILL.md
+sctl validate skills/my-skill
+sctl package  skills/my-skill --output-dir dist/
+# upload dist/my-skill-0.1.0.zip to your registry
 ```
 
 ---
@@ -192,7 +349,9 @@ Use `all` in `compatible_with` to install to every supported platform path.
 
 ## Configuration
 
-`sctl` reads `~/.config/sctl/config.yaml` (or `$XDG_CONFIG_HOME/sctl/config.yaml`):
+`sctl` reads `~/.config/sctl/config.yaml` (or `$XDG_CONFIG_HOME/sctl/config.yaml`).
+
+Create it interactively with `sctl init config`, or write it manually:
 
 ```yaml
 default_registry: myregistry
@@ -206,31 +365,53 @@ registries:
 
   company-github:
     type: github
-    url: myorg/agent-skills-repo
+    url: myorg/agent-skills
     token: ""
 
   company-gitlab:
     type: gitlab
     url: https://gitlab.company.com
+    project: platform/agent-skills   # required for gitlab
     token: ""
 ```
 
 **Supported registry types:**
 
-| Type | Description |
-|---|---|
-| `github` | GitHub Releases — `url` is `owner/repo` |
-| `gitlab` | GitLab Releases — `url` is the GitLab base URL |
-| `artifactory` | JFrog Artifactory Generic Repo — `url` is `<base-url>#<repo-name>` |
-| `local` | Local filesystem — `url` is the base directory path |
+| Type | `url` format | `project` |
+| --- | --- | --- |
+| `github` | `owner/repo` | — |
+| `gitlab` | GitLab base URL | `namespace/project` (required) |
+| `artifactory` | `<base-url>#<repo-name>` | — |
+| `local` | filesystem base path | — |
 
 **Environment variables** override config file values:
 
 | Variable | Overrides |
-|---|---|
+| --- | --- |
 | `SCTL_CACHE_DIR` | `cache_dir` |
 | `SCTL_LOG_LEVEL` | `log_level` |
 | `SCTL_REGISTRY_TOKEN` | Token for the `default_registry` |
+
+---
+
+## Git Integration
+
+`sctl init project` writes the following to `.gitignore` automatically:
+
+```gitignore
+# sctl — installed skill directories are generated artifacts
+# restore with: sctl install
+.claude/skills/
+skills/
+.agents/skills/
+.github/skills/
+
+# sctl — these files must be committed
+# !agent-skills.yaml
+# !agent-skills.lock
+```
+
+Installed skill directories are generated artifacts — they are excluded from Git. Both `agent-skills.yaml` and `agent-skills.lock` must be committed.
 
 ---
 
@@ -266,7 +447,7 @@ sctl install --output json | jq '.data.installed[]'
 ## Exit Codes
 
 | Code | Meaning |
-|---|---|
+| --- | --- |
 | `0` | Success |
 | `1` | User error (missing file, validation failure, SHA256 mismatch) |
 | `2` | Infrastructure error (network failure, I/O error) |
@@ -276,19 +457,10 @@ sctl install --output json | jq '.data.installed[]'
 ## Development
 
 ```bash
-# Run unit tests
-make test
-
-# Run integration tests
-make test-integration
-
-# Build binary
+make test                # go test ./...
+make test-integration    # go test -tags integration ./tests/integration/...
 make build               # → dist/sctl
-
-# Lint
 make lint                # requires golangci-lint
-
-# Cross-compile release snapshot
 make release-snapshot    # requires goreleaser
 ```
 
@@ -299,6 +471,7 @@ cmd/sctl/             # Entrypoint
 internal/
   cli/                # Cobra commands
   config/             # Config loading + env override
+  manifest/           # agent-skills.yaml read/write
   lockfile/           # agent-skills.lock read/write
   skill/              # Types, validator, packager
   registry/           # Registry backends + factory
@@ -307,6 +480,7 @@ internal/
   progress/           # CI-aware progress bars
 testdata/             # Fixture skills for tests
 tests/integration/    # Integration test suite
+examples/             # Ready-to-use skill examples and CI templates
 ```
 
 ---
@@ -320,7 +494,7 @@ Skills are supply-chain artifacts. `sctl` enforces:
 - **Atomic writes** — installations are all-or-nothing; no partial state on failure
 - **Cache integrity** — cache keys are the artifact's SHA256; collisions are impossible
 
-For production use, sign your release artifacts and include the signature in your registry metadata. Never install skills with `sha256: ""` in production lockfiles.
+For production use, sign your release artifacts and include the signature in your registry metadata. Never ship skills with `sha256: ""` in production lockfiles.
 
 ---
 

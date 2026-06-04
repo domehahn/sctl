@@ -10,7 +10,9 @@ import (
 	"time"
 
 	"github.com/domehahn/sctl/internal/lockfile"
+	"github.com/domehahn/sctl/internal/manifest"
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 )
 
 func newInitCmd() *cobra.Command {
@@ -72,9 +74,10 @@ func newInitConfigCmd() *cobra.Command {
 				registryURL = p.ask("Base directory path", "./agent-skills-local")
 			}
 
+			token := p.secret("Token (leave empty to set via SCTL_REGISTRY_TOKEN later)")
 			cacheDir := p.ask("Cache directory", "~/.cache/sctl")
 
-			cfg := buildConfigYAML(registryName, registryType, registryURL, registryProject, cacheDir)
+			cfg := buildConfigYAML(registryName, registryType, registryURL, registryProject, token, cacheDir)
 
 			if err := os.MkdirAll(filepath.Dir(cfgPath), 0o755); err != nil {
 				return &InternalError{Message: "create config dir", Cause: err}
@@ -85,8 +88,8 @@ func newInitConfigCmd() *cobra.Command {
 
 			p.print("\n✓ Created %s\n", cfgPath)
 			p.print("  Default registry: %s\n", registryName)
-			if registryType == "gitlab" || registryType == "github" {
-				p.print("\n  Set your token:\n")
+			if token == "" {
+				p.print("\n  Token not set — export when needed:\n")
 				p.print("  export SCTL_REGISTRY_TOKEN=<your-token>\n")
 			}
 			return nil
@@ -98,11 +101,24 @@ func newInitConfigCmd() *cobra.Command {
 
 // ── sctl init project ─────────────────────────────────────────────────────
 
+const gitignoreBlock = `
+# sctl — installed skill directories are generated artifacts
+# restore with: sctl install
+.claude/skills/
+skills/
+.agents/skills/
+.github/skills/
+
+# sctl — these files must be committed
+# !agent-skills.yaml
+# !agent-skills.lock
+`
+
 func newInitProjectCmd() *cobra.Command {
 	var force bool
 	cmd := &cobra.Command{
 		Use:   "project",
-		Short: "Create agent-skills.lock in the current directory",
+		Short: "Create agent-skills.lock and update .gitignore",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path := lockfile.DefaultFilename
 			if !force {
@@ -112,11 +128,28 @@ func newInitProjectCmd() *cobra.Command {
 					)}
 				}
 			}
+
 			lf := lockfile.New()
 			if err := lf.Write(path); err != nil {
 				return &InternalError{Message: "write lockfile", Cause: err}
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "✓ Created %s\n", path)
+
+			mf := manifest.New()
+			if err := mf.Write(manifest.DefaultFilename); err != nil {
+				return &InternalError{Message: "write manifest", Cause: err}
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "✓ Created %s\n", manifest.DefaultFilename)
+
+			gitignoreUpdated, err := updateGitignore(".gitignore")
+			if err != nil {
+				fmt.Fprintf(cmd.ErrOrStderr(), "  warning: could not update .gitignore: %v\n", err)
+			} else if gitignoreUpdated {
+				fmt.Fprintf(cmd.OutOrStdout(), "✓ Updated .gitignore\n")
+			} else {
+				fmt.Fprintf(cmd.OutOrStdout(), "✓ .gitignore already up to date\n")
+			}
+
 			fmt.Fprintf(cmd.OutOrStdout(), "\n  Add skills with:\n")
 			fmt.Fprintf(cmd.OutOrStdout(), "  sctl add <skill>[@version] --source <registry>\n")
 			return nil
@@ -124,6 +157,32 @@ func newInitProjectCmd() *cobra.Command {
 	}
 	cmd.Flags().BoolVar(&force, "force", false, "Overwrite existing lockfile")
 	return cmd
+}
+
+// updateGitignore appends the sctl block to .gitignore if not already present.
+// Returns true if the file was modified.
+func updateGitignore(path string) (bool, error) {
+	existing, err := os.ReadFile(path)
+	if err != nil && !os.IsNotExist(err) {
+		return false, err
+	}
+
+	if strings.Contains(string(existing), "sctl — installed skill directories") {
+		return false, nil
+	}
+
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		return false, err
+	}
+	defer f.Close()
+
+	// ensure we start on a new line
+	if len(existing) > 0 && existing[len(existing)-1] != '\n' {
+		f.WriteString("\n")
+	}
+	_, err = f.WriteString(gitignoreBlock)
+	return err == nil, err
 }
 
 // ── sctl init skill ───────────────────────────────────────────────────────
@@ -261,6 +320,22 @@ func (p *prompter) choose(label string, options []string) string {
 	return options[0]
 }
 
+func (p *prompter) secret(label string) string {
+	p.print("  %s: ", label)
+	fd := int(os.Stdin.Fd())
+	if term.IsTerminal(fd) {
+		b, err := term.ReadPassword(fd)
+		p.print("\n")
+		if err != nil || len(b) == 0 {
+			return ""
+		}
+		return string(b)
+	}
+	// non-interactive fallback
+	line, _ := p.reader.ReadString('\n')
+	return strings.TrimSpace(line)
+}
+
 func (p *prompter) multiChoose(label string, _ []string, defaults []string) []string {
 	p.print("  %s\n", label)
 	p.print("  Default [%s]: ", strings.Join(defaults, " "))
@@ -278,11 +353,11 @@ func configFilePath() (string, error) {
 	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
 		return filepath.Join(xdg, "sctl", "config.yaml"), nil
 	}
-	dir, err := os.UserConfigDir()
+	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, "sctl", "config.yaml"), nil
+	return filepath.Join(home, ".config", "sctl", "config.yaml"), nil
 }
 
 func writeAtomic(path, content string) error {
@@ -305,7 +380,7 @@ func isValidSkillName(name string) bool {
 	return true
 }
 
-func buildConfigYAML(name, regType, url, project, cacheDir string) string {
+func buildConfigYAML(name, regType, url, project, token, cacheDir string) string {
 	var sb strings.Builder
 	sb.WriteString("default_registry: " + name + "\n\n")
 	sb.WriteString("cache_dir: " + cacheDir + "\n")
@@ -317,7 +392,11 @@ func buildConfigYAML(name, regType, url, project, cacheDir string) string {
 	if project != "" {
 		sb.WriteString("    project: " + project + "\n")
 	}
-	sb.WriteString("    token: \"\"  # set via SCTL_REGISTRY_TOKEN\n")
+	if token != "" {
+		sb.WriteString("    token: " + token + "\n")
+	} else {
+		sb.WriteString("    token: \"\"  # set via SCTL_REGISTRY_TOKEN\n")
+	}
 	return sb.String()
 }
 

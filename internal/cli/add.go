@@ -16,6 +16,7 @@ import (
 	"github.com/domehahn/sctl/internal/config"
 	"github.com/domehahn/sctl/internal/installer"
 	"github.com/domehahn/sctl/internal/lockfile"
+	"github.com/domehahn/sctl/internal/manifest"
 	"github.com/domehahn/sctl/internal/registry"
 	"github.com/domehahn/sctl/internal/skill"
 	"github.com/rs/zerolog/log"
@@ -88,21 +89,35 @@ writes or updates agent-skills.lock.`,
 				}
 			}
 
+			// update lockfile
 			lf, _ := lockfile.Read(lockfile.DefaultFilename)
 			if lf == nil {
 				lf = lockfile.New()
 			}
-			sl := lockfile.SkillLock{
+			lf.Upsert(lockfile.SkillLock{
 				Name:        name,
 				Version:     artifact.Version,
 				Source:      src,
 				SourceURL:   artifact.DownloadURL,
 				SHA256:      actualSHA,
 				InstalledTo: installPaths,
-			}
-			lf.Upsert(sl)
+			})
 			if err := lf.Write(lockfile.DefaultFilename); err != nil {
 				return &InternalError{Message: "write lockfile", Cause: err}
+			}
+
+			// update manifest (source of truth for re-generating the lockfile)
+			mf, _ := manifest.Read(manifest.DefaultFilename)
+			if mf == nil {
+				mf = manifest.New()
+			}
+			mf.Upsert(manifest.SkillEntry{
+				Name:    name,
+				Version: artifact.Version,
+				Source:  src,
+			})
+			if err := mf.Write(manifest.DefaultFilename); err != nil {
+				return &InternalError{Message: "write manifest", Cause: err}
 			}
 
 			if format == OutputJSON {
