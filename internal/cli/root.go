@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"fmt"
 	"os"
 	"runtime/debug"
 	"strings"
@@ -82,10 +83,24 @@ GitHub Copilot, and Codex. sctl installs, validates, and packages them.`,
 }
 
 func newVersionCmd() *cobra.Command {
-	return &cobra.Command{
+	var debugBuildInfo bool
+	c := &cobra.Command{
 		Use:   "version",
 		Short: "Print sctl version information",
 		Run: func(cmd *cobra.Command, args []string) {
+			if debugBuildInfo {
+				info, ok := debug.ReadBuildInfo()
+				if !ok {
+					fmt.Fprintln(cmd.OutOrStdout(), "debug.ReadBuildInfo() returned false")
+					return
+				}
+				fmt.Fprintf(cmd.OutOrStdout(), "Main.Path:    %q\n", info.Main.Path)
+				fmt.Fprintf(cmd.OutOrStdout(), "Main.Version: %q\n", info.Main.Version)
+				for _, s := range info.Settings {
+					fmt.Fprintf(cmd.OutOrStdout(), "Setting:      %s=%q\n", s.Key, s.Value)
+				}
+				return
+			}
 			format := outputFormat()
 			if format == OutputJSON {
 				PrintResult(format, CommandResult{
@@ -102,6 +117,9 @@ func newVersionCmd() *cobra.Command {
 			cmd.Printf("sctl %s (commit %s, built %s)\n", Version, Commit, Date)
 		},
 	}
+	c.Flags().BoolVar(&debugBuildInfo, "debug-build-info", false, "")
+	_ = c.Flags().MarkHidden("debug-build-info")
+	return c
 }
 
 func outputFormat() OutputFormat {
