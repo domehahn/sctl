@@ -15,6 +15,7 @@ type GitHubRegistry struct {
 	client *github.Client
 	org    string
 	repo   string
+	token  string
 }
 
 // NewGitHubRegistry creates a registry backed by GitHub Releases.
@@ -34,6 +35,7 @@ func NewGitHubRegistry(repoSlug, token string) (*GitHubRegistry, error) {
 		client: github.NewClient(httpClient),
 		org:    parts[0],
 		repo:   parts[1],
+		token:  token,
 	}, nil
 }
 

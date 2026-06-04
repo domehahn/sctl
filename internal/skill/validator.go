@@ -61,9 +61,6 @@ func (v *StructuredValidator) Validate(_ context.Context, dir string) (*Validati
 				res.addError("skill.yaml", fmt.Sprintf("unknown platform %q in compatible_with", p))
 			}
 		}
-		if len(skillYAML.CompatibleWith) == 0 {
-			res.addWarning("skill.yaml", "compatible_with is empty — skill will not be installed to any platform path")
-		}
 	}
 
 	if versionOK {
@@ -106,11 +103,17 @@ func (v *StructuredValidator) validateSkillYAML(dir string, res *ValidationResul
 		res.addError("skill.yaml", fmt.Sprintf("parse error: %v", err))
 		return nil, false
 	}
-	if sy.Name == "" {
+	if strings.TrimSpace(sy.Name) == "" {
 		res.addError("skill.yaml", "name is required")
 	}
-	if sy.Version == "" {
+	if strings.TrimSpace(sy.Version) == "" {
 		res.addError("skill.yaml", "version is required")
+	}
+	if strings.TrimSpace(sy.Description) == "" {
+		res.addError("skill.yaml", "description is required")
+	}
+	if len(sy.CompatibleWith) == 0 {
+		res.addError("skill.yaml", "compatible_with must include at least one platform")
 	}
 	return &sy, true
 }

@@ -15,12 +15,12 @@ const (
 )
 
 type RegistryConfig struct {
-	Type    string `yaml:"type"`
-	URL     string `yaml:"url"`
-	Token   string `yaml:"token"`
+	Type  string `yaml:"type"`
+	URL   string `yaml:"url"`
+	Token string `yaml:"token"`
 	// Project is the GitLab namespace/project path (e.g. "platform/agent-skills").
-	// Required for gitlab registries when using skm add.
-	// Not needed for skm install — the lockfile source_url is used directly.
+	// Required for gitlab registries when using skpm add.
+	// Not needed for skpm install — the lockfile source_url is used directly.
 	Project string `yaml:"project,omitempty"`
 }
 
@@ -60,7 +60,7 @@ func LoadFrom(path string) (*Config, error) {
 func defaults() *Config {
 	cacheDir, _ := os.UserCacheDir()
 	return &Config{
-		CacheDir:    filepath.Join(cacheDir, "skm"),
+		CacheDir:    filepath.Join(cacheDir, "skpm"),
 		LogLevel:    defaultLogLevel,
 		Concurrency: defaultConcurrency,
 		Registries:  make(map[string]RegistryConfig),
@@ -69,23 +69,23 @@ func defaults() *Config {
 
 func configPath() (string, error) {
 	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
-		return filepath.Join(xdg, "skm", "config.yaml"), nil
+		return filepath.Join(xdg, "skpm", "config.yaml"), nil
 	}
 	dir, err := os.UserConfigDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, "skm", "config.yaml"), nil
+	return filepath.Join(dir, "skpm", "config.yaml"), nil
 }
 
 func applyEnv(cfg *Config) {
-	if v := os.Getenv("SKM_CACHE_DIR"); v != "" {
+	if v := os.Getenv("SKPM_CACHE_DIR"); v != "" {
 		cfg.CacheDir = v
 	}
-	if v := os.Getenv("SKM_LOG_LEVEL"); v != "" {
+	if v := os.Getenv("SKPM_LOG_LEVEL"); v != "" {
 		cfg.LogLevel = v
 	}
-	if v := os.Getenv("SKM_REGISTRY_TOKEN"); v != "" {
+	if v := os.Getenv("SKPM_REGISTRY_TOKEN"); v != "" {
 		if cfg.DefaultRegistry != "" {
 			if reg, ok := cfg.Registries[cfg.DefaultRegistry]; ok {
 				reg.Token = v

@@ -13,6 +13,8 @@ import (
 type GitLabRegistry struct {
 	client    *gitlab.Client
 	projectID string
+	baseURL   string
+	token     string
 }
 
 // NewGitLabRegistry creates a registry backed by GitLab Releases.
@@ -26,7 +28,10 @@ func NewGitLabRegistry(baseURL, projectID, token string) (*GitLabRegistry, error
 	if err != nil {
 		return nil, fmt.Errorf("gitlab: create client: %w", err)
 	}
-	return &GitLabRegistry{client: client, projectID: projectID}, nil
+	if baseURL == "" {
+		baseURL = "https://gitlab.com"
+	}
+	return &GitLabRegistry{client: client, projectID: projectID, baseURL: strings.TrimRight(baseURL, "/"), token: token}, nil
 }
 
 func (r *GitLabRegistry) Resolve(ctx context.Context, name, version string) (*ResolvedArtifact, error) {

@@ -2,10 +2,10 @@
 #
 # Dieses File ist die einzige Wahrheitsquelle darüber, welche Skill-Version
 # in diesem Projekt aktiv ist. Committen. Niemals manuell editieren —
-# immer über `skm add` oder `skm install` erzeugen lassen.
+# immer über `skpm add` oder `skpm install` erzeugen lassen.
 #
 # source_url enthält die direkte Download-URL zum ZIP-Artefakt.
-# Dadurch funktioniert `skm install` unabhängig davon, ob die Skills
+# Dadurch funktioniert `skpm install` unabhängig davon, ob die Skills
 # in einem Monorepo oder in separaten Repos liegen.
 
 version: 1

@@ -52,6 +52,9 @@ func (p *Packager) Package(ctx context.Context, dir, outputDir string) (*Package
 	if outputDir == "" {
 		outputDir = dir
 	}
+	if err := os.MkdirAll(outputDir, 0o755); err != nil {
+		return nil, fmt.Errorf("create output directory: %w", err)
+	}
 	outName := fmt.Sprintf("%s-%s.zip", sy.Name, sy.Version)
 	outPath := filepath.Join(outputDir, outName)
 

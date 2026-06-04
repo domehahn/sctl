@@ -15,7 +15,7 @@ func newValidateCmd() *cobra.Command {
 		Long: `Checks that a skill directory contains all required files with correct content:
   - SKILL.md (non-empty)
   - VERSION (valid semver)
-  - skill.yaml (name, version, compatible_with present; version matches VERSION)
+  - skill.yaml (name, version, description, compatible_with required; version matches VERSION)
   - CHANGELOG.md (entry for current version recommended)
 
 Exits 0 if valid, 1 if errors are found.`,

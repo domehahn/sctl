@@ -1,4 +1,4 @@
-# sctl — Skill Control
+# skpm — Skill Manager
 
 A production-ready package manager for AI agent skills. Manages [SKILL.md](https://docs.gitlab.com/user/duo_agent_platform/customize/agent_skills/)-based capability bundles as versioned, verifiable artifacts — for Claude Code, GitLab Duo, GitHub Copilot, and Codex.
 
@@ -10,20 +10,20 @@ Think `npm` or `cargo`, but for agent skills.
 
 Agent skills are SKILL.md files that give coding assistants domain-specific knowledge — security policy reviewers, documentation checkers, framework-specific guides. Without tooling they tend to be copy-pasted across repos, drift out of sync, and have no integrity guarantees.
 
-`skm` treats skills like software:
+`skpm` treats skills like software:
 
 - **Version-pinned** — `agent-skills.lock` records exact versions and SHA256 checksums
 - **Reproducible** — any CI run installs the exact same bytes
 - **Multi-platform** — one install writes to all compatible platform paths automatically
 - **Auditable** — every artifact is verified before it touches disk
-- **Recoverable** — deleted lockfile? `skm install` regenerates it from `agent-skills.yaml`
+- **Recoverable** — deleted lockfile? `skpm install` regenerates it from `agent-skills.yaml`
 
 ---
 
 ## Install
 
 ```bash
-go install github.com/domehahn/sctl/cmd/skm@latest
+go install github.com/domehahn/sctl/cmd/skpm@latest
 ```
 
 Or download a pre-built binary from the [releases page](https://github.com/domehahn/sctl/releases).
@@ -32,43 +32,50 @@ Or download a pre-built binary from the [releases page](https://github.com/domeh
 
 ## Quick Start
 
+### As a skill consumer
+
 ```bash
-# 1 — set up skm for the first time
-skm init config
+# 1 — first-time setup: config + project in one step
+skpm init
 
-# 2 — initialize a project
-skm init project
+# 2 — add skills
+skpm add gitlab-policy-reviewer@1.5.0 --source myregistry
+skpm add documentation-reviewer       --source myregistry
 
-# 3 — add skills
-skm add gitlab-policy-reviewer@1.5.0 --source myregistry
-skm add documentation-reviewer       --source myregistry
-
-# 4 — commit both files
+# 3 — commit both files
 git add agent-skills.yaml agent-skills.lock
 git commit -m "add agent skills"
 
-# 5 — any machine, any time
-skm install
+# 4 — any machine, any time
+skpm install
+```
+
+### As a skill author
+
+```bash
+skpm init skill my-skill          # scaffold
+# edit my-skill/SKILL.md
+skpm publish my-skill --source myregistry   # validate → package → tag → upload
 ```
 
 ---
 
 ## Two-File Model
 
-`skm` uses two files, both committed to Git — similar to Poetry:
+`skpm` uses two files, both committed to Git — similar to Poetry:
 
 | File | Analogy | Purpose |
 | --- | --- | --- |
 | `agent-skills.yaml` | `pyproject.toml` | Manifest: which skills you want (human-edited) |
 | `agent-skills.lock` | `poetry.lock` | Lockfile: exact versions + SHA256 (generated) |
 
-`skm install` behaviour:
+`skpm install` behaviour:
 
 - **Lockfile present** → installs exactly what is pinned (fast, deterministic)
 - **Lockfile missing**, manifest present → resolves versions from registry, generates lockfile, installs
 - **Both missing** → error with instructions
 
-This means a deleted lockfile is never a problem: `skm install` regenerates it from `agent-skills.yaml` automatically.
+A deleted lockfile is never a problem: `skpm install` regenerates it from `agent-skills.yaml` automatically.
 
 **`agent-skills.yaml`** (what you declare):
 
@@ -82,7 +89,7 @@ skills:
     source: myregistry   # no version = latest
 ```
 
-**`agent-skills.lock`** (what gets installed — never edit manually):
+**`agent-skills.lock`** (generated — never edit manually):
 
 ```yaml
 version: 1
@@ -102,54 +109,43 @@ skills:
 
 ## Commands
 
-### `skm init`
+### `skpm init`
 
-Scaffold skm configuration and project files interactively.
+Interactive setup wizard. Runs two steps in sequence:
 
-#### `skm init config`
+1. **Config** — creates `~/.config/skpm/config.yaml` (skipped if already exists)
+2. **Project** — creates `agent-skills.yaml`, `agent-skills.lock`, updates `.gitignore`
 
-Creates `~/.config/skm/config.yaml` via an interactive wizard.
-
-```
-skm init config [--force]
-```
-
-Asks for registry type, URL, project path, and token (masked input). Running it again without `--force` is a no-op if the file already exists.
-
-#### `skm init project`
-
-Creates `agent-skills.yaml`, `agent-skills.lock`, and updates `.gitignore`.
-
-```
-skm init project [--force]
+```bash
+skpm init [--force]
 ```
 
-The `.gitignore` update excludes installed skill directories (generated artifacts) and adds a comment that both `agent-skills.yaml` and `agent-skills.lock` must be committed.
+`--force` re-runs both steps even if files already exist.
 
-#### `skm init skill <name>`
+#### `skpm init skill <name>`
 
 Scaffolds a complete, immediately valid skill directory.
 
-```
-skm init skill my-skill
-skm init skill my-skill --output-dir ./skills
+```bash
+skpm init skill my-skill
+skpm init skill my-skill --output-dir ./skills
 ```
 
-Asks for description, version, owner, and compatible platforms. The generated skill passes `skm validate` out of the box.
+Asks for description, version, owner, and compatible platforms. The generated skill passes `skpm validate` out of the box.
 
 ---
 
-### `skm config`
+### `skpm config`
 
-Inspect and validate the skm configuration.
+Inspect and validate the skpm configuration.
 
-#### `skm config validate`
+#### `skpm config validate`
 
-Validates `~/.config/skm/config.yaml`.
+Validates `~/.config/skpm/config.yaml`.
 
-```
-skm config validate
-skm config validate --path ./custom-config.yaml
+```bash
+skpm config validate
+skpm config validate --path ./custom-config.yaml
 ```
 
 Checks:
@@ -161,28 +157,28 @@ Checks:
 - `github` registries have `url` in `owner/repo` format (not a full URL)
 - `artifactory` registries have `url` in `<base-url>#<repo-name>` format
 
-#### `skm config show`
+#### `skpm config show`
 
 Prints the resolved config with all environment variable overrides applied. Tokens are masked as `***`.
 
-```
-skm config show
-skm config show --output json
+```bash
+skpm config show
+skpm config show --output json
 ```
 
 ---
 
-### `skm install`
+### `skpm install`
 
 Installs all skills. Generates `agent-skills.lock` from `agent-skills.yaml` if the lockfile is missing.
 
-```
-skm install [--lock <path>] [--dry-run] [--concurrency N]
+```bash
+skpm install [--lock <path>] [--dry-run] [--concurrency N]
 ```
 
 - Downloads artifacts in parallel (default 4 concurrent)
 - Verifies SHA256 before writing anything to disk
-- Uses a local cache (`~/.cache/skm/`) — re-runs are instant
+- Uses a local cache (`~/.cache/skpm/`) — re-runs are instant
 - Atomic installs: staging directory → rename, never partial state
 - `--dry-run` prints what would be installed without writing files
 
@@ -197,28 +193,57 @@ skm install [--lock <path>] [--dry-run] [--concurrency N]
 
 ---
 
-### `skm add <skill[@version]>`
+### `skpm add <skill[@version]>`
 
 Resolves, downloads, and installs a skill, then updates both `agent-skills.yaml` and `agent-skills.lock`.
 
-```
-skm add gitlab-policy-reviewer@1.5.0 --source myregistry
-skm add documentation-reviewer       --source myregistry
+```bash
+skpm add gitlab-policy-reviewer@1.5.0 --source myregistry
+skpm add documentation-reviewer       --source myregistry
 ```
 
+**Local paths** — no registry needed:
+
+```bash
+skpm add ./my-skill
+skpm add ../shared-skills/sdlc-manager
+```
+
+**Without a release tag** — download directly from a branch or commit:
+
+```bash
+skpm add my-skill --source myregistry --ref main
+skpm add my-skill --source myregistry --ref feature/new-checks
+```
+
+For monorepos where the skill lives in a subdirectory:
+
+```bash
+skpm add my-skill --source myregistry --ref main --path skills/my-skill
+```
+
+**Flags:**
+
+| Flag | Description |
+| --- | --- |
+| `--source` | Registry to use (falls back to `default_registry`) |
+| `--ref` | Branch, tag, or commit SHA — skips release lookup |
+| `--path` | Path of the skill within the repository (for `--ref` with monorepos) |
+
 - Version defaults to latest if omitted
-- Reads `compatible_with` from the artifact's `skill.yaml` to determine install paths
-- Creates or updates both files atomically
+- For local paths: reads `skill.yaml` directly, copies the directory atomically
+- For `--ref`: downloads the archive at that ref, validates, then installs
+- Creates or updates both `agent-skills.yaml` and `agent-skills.lock`
 
 ---
 
-### `skm validate [path]`
+### `skpm validate [path]`
 
 Validates a skill directory structure. Default path is the current directory.
 
-```
-skm validate ./skills/gitlab-policy-reviewer
-skm validate --output json
+```bash
+skpm validate ./skills/gitlab-policy-reviewer
+skpm validate --output json
 ```
 
 Checks:
@@ -233,27 +258,81 @@ Exits `0` if valid, `1` if errors are found. Warnings do not fail the check.
 
 ---
 
-### `skm package [path]`
+### `skpm package [path]`
 
-Packages a skill directory into a distributable ZIP artifact.
+Packages a skill directory into a local ZIP artifact. Default path is the current directory.
 
+```bash
+skpm package ./skills/gitlab-policy-reviewer
+skpm package ./skills/gitlab-policy-reviewer --output-dir ./dist
 ```
-skm package ./skills/gitlab-policy-reviewer
-skm package ./skills/gitlab-policy-reviewer --output-dir ./dist
-```
 
-- Runs `validate` first — packaging fails if the skill is invalid
-- Creates `<name>-<version>.zip` containing all skill files plus `manifest.json`
-- Prints the SHA256 of the ZIP — paste this into your registry configuration
+- Runs `validate` first — fails if the skill is invalid
+- Creates `<name>-<version>.zip` with all skill files plus `manifest.json`
+- Prints the SHA256 of the ZIP
 - Excludes `.git/`, `*.tmp`, `*.part`
+
+> For a full release (tag + upload), use `skpm publish` instead.
 
 ---
 
-### `skm version`
+### `skpm publish [path]`
 
+Runs the complete release pipeline for a skill. Default path is the current directory.
+
+```bash
+skpm publish [path] --source <registry> [flags]
 ```
-skm version
-skm version --output json
+
+Steps executed in order:
+
+```text
+1. Validate   — checks SKILL.md, VERSION, skill.yaml, CHANGELOG.md
+2. Package    — builds <name>-<version>.zip
+3. Git tag    — creates <name>/v<version> (or v<version> with --tag-format plain)
+4. Git push   — pushes the tag to origin
+5. Upload     — uploads the ZIP to the configured registry
+```
+
+**Flags:**
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--source` | `default_registry` | Registry to publish to |
+| `--tag-format` | `prefixed` | `prefixed` = `<name>/v<ver>` (monorepo), `plain` = `v<ver>` (per-skill repo) |
+| `--no-tag` | `false` | Skip creating a git tag |
+| `--no-push` | `false` | Skip pushing the tag |
+| `--dry-run` | `false` | Preview all steps without making changes |
+
+**Examples:**
+
+```bash
+# Monorepo — creates tag gitlab-policy-reviewer/v1.5.0
+skpm publish ./skills/gitlab-policy-reviewer --source company-gitlab
+
+# Per-skill repo — creates tag v1.5.0
+skpm publish . --source company-gitlab --tag-format plain
+
+# Preview without changes
+skpm publish ./skills/my-skill --source company-gitlab --dry-run
+
+# Upload only, no new tag
+skpm publish ./skills/my-skill --source company-gitlab --no-tag
+```
+
+After publishing, add the skill to a consumer project:
+
+```bash
+skpm add my-skill@1.5.0 --source company-gitlab
+```
+
+---
+
+### `skpm version`
+
+```bash
+skpm version
+skpm version --output json
 ```
 
 ---
@@ -276,17 +355,17 @@ All commands support `--output json` for machine-readable output — useful in C
 ### First-time setup
 
 ```bash
-skm init config      # create ~/.config/skm/config.yaml
-skm config validate  # verify it's correct
+skpm init             # config + project in one step
+skpm config validate  # verify config is correct
 ```
 
-### Start a new project
+### Add skills to a project
 
 ```bash
-skm init project                                          # agent-skills.yaml + agent-skills.lock + .gitignore
-skm add gitlab-policy-reviewer@1.5.0 --source myregistry # updates both files, installs skill
-skm add documentation-reviewer       --source myregistry
-git add agent-skills.yaml agent-skills.lock .gitignore
+skpm add gitlab-policy-reviewer@1.5.0 --source myregistry
+skpm add documentation-reviewer       --source myregistry
+skpm add ./local-dev-skill            # from local path
+git add agent-skills.yaml agent-skills.lock
 git commit -m "add agent skills"
 ```
 
@@ -294,24 +373,24 @@ git commit -m "add agent skills"
 
 ```bash
 git clone <repo>
-skm install          # reads agent-skills.lock, installs everything
+skpm install
 ```
 
 ### Recover a deleted lockfile
 
 ```bash
-rm agent-skills.lock  # oops
-skm install          # regenerates agent-skills.lock from agent-skills.yaml, then installs
+rm agent-skills.lock
+skpm install   # regenerates from agent-skills.yaml, then installs
 ```
 
-### Author and publish a new skill
+### Author and release a new skill
 
 ```bash
-skm init skill my-skill --output-dir ./skills
+skpm init skill my-skill --output-dir ./skills
 # edit skills/my-skill/SKILL.md
-skm validate skills/my-skill
-skm package  skills/my-skill --output-dir dist/
-# upload dist/my-skill-0.1.0.zip to your registry
+skpm validate skills/my-skill
+skpm publish  skills/my-skill --source myregistry
+# → validates, packages, creates tag, pushes, uploads
 ```
 
 ---
@@ -320,7 +399,7 @@ skm package  skills/my-skill --output-dir dist/
 
 A valid skill directory:
 
-```
+```text
 my-skill/
   SKILL.md        # Agent-readable capability definition
   VERSION         # Semver string, e.g. "1.5.0"
@@ -349,19 +428,19 @@ Use `all` in `compatible_with` to install to every supported platform path.
 
 ## Configuration
 
-`skm` reads `~/.config/skm/config.yaml` (or `$XDG_CONFIG_HOME/skm/config.yaml`).
+`skpm` reads `~/.config/skpm/config.yaml` (or `$XDG_CONFIG_HOME/skpm/config.yaml`).
 
-Create it interactively with `skm init config`, or write it manually:
+Create it interactively with `skpm init`, or write it manually:
 
 ```yaml
 default_registry: myregistry
-cache_dir: ~/.cache/skm
+cache_dir: ~/.cache/skpm
 
 registries:
   myregistry:
     type: artifactory
     url: https://artifactory.company.com/artifactory#agent-skills
-    token: ""           # set via SKM_REGISTRY_TOKEN
+    token: ""           # set via SKPM_REGISTRY_TOKEN
 
   company-github:
     type: github
@@ -388,30 +467,30 @@ registries:
 
 | Variable | Overrides |
 | --- | --- |
-| `SKM_CACHE_DIR` | `cache_dir` |
-| `SKM_LOG_LEVEL` | `log_level` |
-| `SKM_REGISTRY_TOKEN` | Token for the `default_registry` |
+| `SKPM_CACHE_DIR` | `cache_dir` |
+| `SKPM_LOG_LEVEL` | `log_level` |
+| `SKPM_REGISTRY_TOKEN` | Token for the `default_registry` |
 
 ---
 
 ## Git Integration
 
-`skm init project` writes the following to `.gitignore` automatically:
+`skpm init` writes the following to `.gitignore` automatically:
 
 ```gitignore
-# sctl — installed skill directories are generated artifacts
-# restore with: skm install
+# skpm — installed skill directories are generated artifacts
+# restore with: skpm install
 .claude/skills/
 skills/
 .agents/skills/
 .github/skills/
 
-# sctl — these files must be committed
+# skpm — these files must be committed
 # !agent-skills.yaml
 # !agent-skills.lock
 ```
 
-Installed skill directories are generated artifacts — they are excluded from Git. Both `agent-skills.yaml` and `agent-skills.lock` must be committed.
+Installed skill directories are generated artifacts — excluded from Git. Both `agent-skills.yaml` and `agent-skills.lock` must be committed.
 
 ---
 
@@ -421,25 +500,25 @@ Installed skill directories are generated artifacts — they are excluded from G
 # .gitlab-ci.yml
 install-skills:
   script:
-    - skm install --concurrency 8
+    - skpm install --concurrency 8
   cache:
-    key: sctl-$CI_COMMIT_REF_SLUG
+    key: skpm-$CI_COMMIT_REF_SLUG
     paths:
-      - ~/.cache/skm/
+      - ~/.cache/skpm/
 ```
 
 ```yaml
 # .github/workflows/skills.yml
 - name: Install agent skills
-  run: skm install
+  run: skpm install
   env:
-    SKM_REGISTRY_TOKEN: ${{ secrets.SKILLS_REGISTRY_TOKEN }}
+    SKPM_REGISTRY_TOKEN: ${{ secrets.SKILLS_REGISTRY_TOKEN }}
 ```
 
 For JSON output in CI (e.g. to feed into jq):
 
 ```bash
-skm install --output json | jq '.data.installed[]'
+skpm install --output json | jq '.data.installed[]'
 ```
 
 ---
@@ -457,28 +536,32 @@ skm install --output json | jq '.data.installed[]'
 ## Development
 
 ```bash
-make test                # go test ./...
+make test                # go test ./tests/unit/...
 make test-integration    # go test -tags integration ./tests/integration/...
-make build               # → dist/sctl
+make test-all            # go test ./tests/...
+make coverage            # coverage for ./internal/... exercised by ./tests/...
+make build               # → dist/skpm
 make lint                # requires golangci-lint
 make release-snapshot    # requires goreleaser
 ```
 
 **Project layout:**
 
-```
-cmd/skm/             # Entrypoint
+```text
+cmd/skpm/              # Entrypoint
 internal/
   cli/                # Cobra commands
   config/             # Config loading + env override
   manifest/           # agent-skills.yaml read/write
   lockfile/           # agent-skills.lock read/write
   skill/              # Types, validator, packager
-  registry/           # Registry backends + factory
+  registry/           # Registry backends + factory (download)
+  publisher/          # Publisher backends + factory (upload)
   cache/              # SHA256-keyed disk cache
   installer/          # Download + atomic install + platform paths
   progress/           # CI-aware progress bars
 testdata/             # Fixture skills for tests
+tests/unit/           # Unit test suite
 tests/integration/    # Integration test suite
 examples/             # Ready-to-use skill examples and CI templates
 ```
@@ -487,7 +570,7 @@ examples/             # Ready-to-use skill examples and CI templates
 
 ## Security
 
-Skills are supply-chain artifacts. `skm` enforces:
+Skills are supply-chain artifacts. `skpm` enforces:
 
 - **SHA256 verification** on every download before writing to disk
 - **Zip-slip protection** — path traversal in ZIP entries is rejected

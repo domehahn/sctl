@@ -15,151 +15,130 @@ import (
 	"golang.org/x/term"
 )
 
-func newInitCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "init",
-		Short: "Initialize skm config, a project lockfile, or a new skill",
-		Long: `Scaffold skm configuration and project files interactively.
-
-  skm init config          — create ~/.config/skm/config.yaml
-  skm init project         — create agent-skills.lock in the current directory
-  skm init skill <name>    — scaffold a new skill directory`,
-	}
-	cmd.AddCommand(newInitConfigCmd())
-	cmd.AddCommand(newInitProjectCmd())
-	cmd.AddCommand(newInitSkillCmd())
-	return cmd
-}
-
-// ── skm init config ──────────────────────────────────────────────────────
-
-func newInitConfigCmd() *cobra.Command {
-	var force bool
-	cmd := &cobra.Command{
-		Use:   "config",
-		Short: "Create ~/.config/skm/config.yaml interactively",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			cfgPath, err := configFilePath()
-			if err != nil {
-				return &InternalError{Message: "resolve config path", Cause: err}
-			}
-
-			if !force {
-				if _, err := os.Stat(cfgPath); err == nil {
-					return &UserError{Message: fmt.Sprintf(
-						"config already exists at %s\nUse --force to overwrite.", cfgPath,
-					)}
-				}
-			}
-
-			p := newPrompter(cmd)
-			p.header("skm config init")
-			p.print("This creates %s\n\n", cfgPath)
-
-			registryType := p.choose("Registry type", []string{"gitlab", "github", "artifactory", "local"})
-			registryName := p.ask("Registry name (used as key in config)", "company-"+registryType)
-
-			var registryURL, registryProject string
-			switch registryType {
-			case "gitlab":
-				registryURL = p.ask("GitLab base URL", "https://gitlab.company.com")
-				registryProject = p.ask("Project path (namespace/project)", "platform/agent-skills")
-			case "github":
-				registryURL = p.ask("GitHub owner/repo", "myorg/agent-skills")
-			case "artifactory":
-				base := p.ask("Artifactory base URL", "https://artifactory.company.com/artifactory")
-				repo := p.ask("Repository name", "agent-skills")
-				registryURL = base + "#" + repo
-			case "local":
-				registryURL = p.ask("Base directory path", "./agent-skills-local")
-			}
-
-			token := p.secret("Token (leave empty to set via SKM_REGISTRY_TOKEN later)")
-			cacheDir := p.ask("Cache directory", "~/.cache/skm")
-
-			cfg := buildConfigYAML(registryName, registryType, registryURL, registryProject, token, cacheDir)
-
-			if err := os.MkdirAll(filepath.Dir(cfgPath), 0o755); err != nil {
-				return &InternalError{Message: "create config dir", Cause: err}
-			}
-			if err := writeAtomic(cfgPath, cfg); err != nil {
-				return &InternalError{Message: "write config", Cause: err}
-			}
-
-			p.print("\n✓ Created %s\n", cfgPath)
-			p.print("  Default registry: %s\n", registryName)
-			if token == "" {
-				p.print("\n  Token not set — export when needed:\n")
-				p.print("  export SKM_REGISTRY_TOKEN=<your-token>\n")
-			}
-			return nil
-		},
-	}
-	cmd.Flags().BoolVar(&force, "force", false, "Overwrite existing config")
-	return cmd
-}
-
-// ── skm init project ─────────────────────────────────────────────────────
-
 const gitignoreBlock = `
-# skm — installed skill directories are generated artifacts
-# restore with: skm install
+# skpm — installed skill directories are generated artifacts
+# restore with: skpm install
 .claude/skills/
 skills/
 .agents/skills/
 .github/skills/
 
-# skm — these files must be committed
+# skpm — these files must be committed
 # !agent-skills.yaml
 # !agent-skills.lock
 `
 
-func newInitProjectCmd() *cobra.Command {
+func newInitCmd() *cobra.Command {
 	var force bool
 	cmd := &cobra.Command{
-		Use:   "project",
-		Short: "Create agent-skills.lock and update .gitignore",
+		Use:   "init",
+		Short: "Initialize skpm: set up config and project files interactively",
+		Long: `Interactive setup wizard for skpm.
+
+Runs two steps in sequence:
+
+  1. Config  — creates ~/.config/skpm/config.yaml (skipped if already exists)
+  2. Project — creates agent-skills.yaml, agent-skills.lock, updates .gitignore
+
+To scaffold a new skill instead, use:
+  skpm init skill <name>`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			path := lockfile.DefaultFilename
-			if !force {
-				if _, err := os.Stat(path); err == nil {
-					return &UserError{Message: fmt.Sprintf(
-						"%s already exists\nUse --force to overwrite.", path,
-					)}
+			p := newPrompter(cmd)
+			p.header("skpm init")
+
+			// ── Step 1: Config ──────────────────────────────────────────
+			cfgPath, err := configFilePath()
+			if err != nil {
+				return &InternalError{Message: "resolve config path", Cause: err}
+			}
+
+			cfgExists := fileExists(cfgPath)
+			if cfgExists && !force {
+				p.print("✓ Config already exists at %s\n", cfgPath)
+			} else {
+				p.print("Step 1/2 — Config (%s)\n\n", cfgPath)
+
+				registryType := p.choose("Registry type", []string{"gitlab", "github", "artifactory", "local"})
+				registryName := p.ask("Registry name", "company-"+registryType)
+
+				var registryURL, registryProject string
+				switch registryType {
+				case "gitlab":
+					registryURL = p.ask("GitLab base URL", "https://gitlab.company.com")
+					registryProject = p.ask("Project path (namespace/project)", "platform/agent-skills")
+				case "github":
+					registryURL = p.ask("GitHub owner/repo", "myorg/agent-skills")
+				case "artifactory":
+					base := p.ask("Artifactory base URL", "https://artifactory.company.com/artifactory")
+					repo := p.ask("Repository name", "agent-skills")
+					registryURL = base + "#" + repo
+				case "local":
+					registryURL = p.ask("Base directory path", "./agent-skills-local")
+				}
+
+				token := p.secret("Token (leave empty to set via SKPM_REGISTRY_TOKEN later)")
+				cacheDir := p.ask("Cache directory", "~/.cache/skpm")
+
+				cfg := buildConfigYAML(registryName, registryType, registryURL, registryProject, token, cacheDir)
+				if err := os.MkdirAll(filepath.Dir(cfgPath), 0o755); err != nil {
+					return &InternalError{Message: "create config dir", Cause: err}
+				}
+				if err := writeAtomic(cfgPath, cfg); err != nil {
+					return &InternalError{Message: "write config", Cause: err}
+				}
+				p.print("\n✓ Created %s\n", cfgPath)
+				if token == "" {
+					p.print("  Token not set — export when needed: export SKPM_REGISTRY_TOKEN=<token>\n")
 				}
 			}
 
-			lf := lockfile.New()
-			if err := lf.Write(path); err != nil {
-				return &InternalError{Message: "write lockfile", Cause: err}
-			}
-			fmt.Fprintf(cmd.OutOrStdout(), "✓ Created %s\n", path)
-
-			mf := manifest.New()
-			if err := mf.Write(manifest.DefaultFilename); err != nil {
-				return &InternalError{Message: "write manifest", Cause: err}
-			}
-			fmt.Fprintf(cmd.OutOrStdout(), "✓ Created %s\n", manifest.DefaultFilename)
-
-			gitignoreUpdated, err := updateGitignore(".gitignore")
-			if err != nil {
-				fmt.Fprintf(cmd.ErrOrStderr(), "  warning: could not update .gitignore: %v\n", err)
-			} else if gitignoreUpdated {
-				fmt.Fprintf(cmd.OutOrStdout(), "✓ Updated .gitignore\n")
+			// ── Step 2: Project ─────────────────────────────────────────
+			p.print("\n")
+			manifestExists := fileExists(manifest.DefaultFilename)
+			if manifestExists && !force {
+				p.print("✓ Project already initialized (%s exists)\n", manifest.DefaultFilename)
 			} else {
-				fmt.Fprintf(cmd.OutOrStdout(), "✓ .gitignore already up to date\n")
+				p.print("Step 2/2 — Project\n\n")
+
+				if err := lockfile.New().Write(lockfile.DefaultFilename); err != nil {
+					return &InternalError{Message: "write lockfile", Cause: err}
+				}
+				p.print("✓ Created %s\n", lockfile.DefaultFilename)
+
+				if err := manifest.New().Write(manifest.DefaultFilename); err != nil {
+					return &InternalError{Message: "write manifest", Cause: err}
+				}
+				p.print("✓ Created %s\n", manifest.DefaultFilename)
+
+				updated, err := updateGitignore(".gitignore")
+				if err != nil {
+					p.print("  warning: could not update .gitignore: %v\n", err)
+				} else if updated {
+					p.print("✓ Updated .gitignore\n")
+				} else {
+					p.print("✓ .gitignore already up to date\n")
+				}
 			}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "\n  Add skills with:\n")
-			fmt.Fprintf(cmd.OutOrStdout(), "  skm add <skill>[@version] --source <registry>\n")
+			// ── Summary ─────────────────────────────────────────────────
+			p.print("\nAll done. Next steps:\n")
+			p.print("  skpm add <skill>[@version] --source <registry>\n")
+			p.print("  git add agent-skills.yaml agent-skills.lock\n")
+			p.print("  git commit -m \"add agent skills\"\n")
 			return nil
 		},
 	}
-	cmd.Flags().BoolVar(&force, "force", false, "Overwrite existing lockfile")
+	cmd.Flags().BoolVar(&force, "force", false, "Re-run even if config/project files already exist")
+	cmd.AddCommand(newInitSkillCmd())
 	return cmd
 }
 
-// updateGitignore appends the skm block to .gitignore if not already present.
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+// updateGitignore appends the skpm block to .gitignore if not already present.
 // Returns true if the file was modified.
 func updateGitignore(path string) (bool, error) {
 	existing, err := os.ReadFile(path)
@@ -167,7 +146,7 @@ func updateGitignore(path string) (bool, error) {
 		return false, err
 	}
 
-	if strings.Contains(string(existing), "skm — installed skill directories") {
+	if strings.Contains(string(existing), "skpm — installed skill directories") {
 		return false, nil
 	}
 
@@ -185,7 +164,7 @@ func updateGitignore(path string) (bool, error) {
 	return err == nil, err
 }
 
-// ── skm init skill ───────────────────────────────────────────────────────
+// ── skpm init skill ───────────────────────────────────────────────────────
 
 func newInitSkillCmd() *cobra.Command {
 	var outputDir string
@@ -212,7 +191,7 @@ func newInitSkillCmd() *cobra.Command {
 			}
 
 			p := newPrompter(cmd)
-			p.header("skm skill init")
+			p.header("skpm skill init")
 
 			description := p.ask("Description", "A specialized skill for "+name)
 			version := p.ask("Initial version", "0.1.0")
@@ -237,9 +216,9 @@ func newInitSkillCmd() *cobra.Command {
 			}
 
 			files := map[string]string{
-				"SKILL.md":    skillMDTemplate,
-				"skill.yaml":  skillYAMLTemplate,
-				"VERSION":     version,
+				"SKILL.md":     skillMDTemplate,
+				"skill.yaml":   skillYAMLTemplate,
+				"VERSION":      version,
 				"CHANGELOG.md": skillChangelogTemplate,
 			}
 
@@ -259,8 +238,8 @@ func newInitSkillCmd() *cobra.Command {
 			}
 			p.print("\nNext steps:\n")
 			p.print("  1. Edit %s/SKILL.md with your skill's instructions\n", name)
-			p.print("  2. skm validate %s\n", skillDir)
-			p.print("  3. skm package  %s\n", skillDir)
+			p.print("  2. skpm validate %s\n", skillDir)
+			p.print("  3. skpm package  %s\n", skillDir)
 			return nil
 		},
 	}
@@ -351,13 +330,13 @@ func (p *prompter) multiChoose(label string, _ []string, defaults []string) []st
 
 func configFilePath() (string, error) {
 	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
-		return filepath.Join(xdg, "skm", "config.yaml"), nil
+		return filepath.Join(xdg, "skpm", "config.yaml"), nil
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".config", "skm", "config.yaml"), nil
+	return filepath.Join(home, ".config", "skpm", "config.yaml"), nil
 }
 
 func writeAtomic(path, content string) error {
@@ -395,7 +374,7 @@ func buildConfigYAML(name, regType, url, project, token, cacheDir string) string
 	if token != "" {
 		sb.WriteString("    token: " + token + "\n")
 	} else {
-		sb.WriteString("    token: \"\"  # set via SKM_REGISTRY_TOKEN\n")
+		sb.WriteString("    token: \"\"  # set via SKPM_REGISTRY_TOKEN\n")
 	}
 	return sb.String()
 }

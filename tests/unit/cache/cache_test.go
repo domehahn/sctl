@@ -1,10 +1,11 @@
-package cache
+package cache_test
 
 import (
 	"io"
 	"strings"
 	"testing"
 
+	"github.com/domehahn/sctl/internal/cache"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -12,12 +13,12 @@ import (
 const testSHA = "abc123def456"
 
 func TestHasMiss(t *testing.T) {
-	c := New(t.TempDir())
+	c := cache.New(t.TempDir())
 	assert.False(t, c.Has(testSHA))
 }
 
 func TestPutAndGet(t *testing.T) {
-	c := New(t.TempDir())
+	c := cache.New(t.TempDir())
 
 	require.NoError(t, c.Put(testSHA, strings.NewReader("hello cache")))
 	assert.True(t, c.Has(testSHA))
@@ -32,7 +33,7 @@ func TestPutAndGet(t *testing.T) {
 }
 
 func TestPutIdempotent(t *testing.T) {
-	c := New(t.TempDir())
+	c := cache.New(t.TempDir())
 
 	require.NoError(t, c.Put(testSHA, strings.NewReader("data")))
 	require.NoError(t, c.Put(testSHA, strings.NewReader("data")))
@@ -41,8 +42,27 @@ func TestPutIdempotent(t *testing.T) {
 
 func TestPath(t *testing.T) {
 	dir := t.TempDir()
-	c := New(dir)
+	c := cache.New(dir)
 	p := c.Path(testSHA)
 	assert.Contains(t, p, testSHA)
 	assert.Contains(t, p, dir)
+}
+
+func TestGetMissing(t *testing.T) {
+	c := cache.New(t.TempDir())
+	_, err := c.Get("nonexistent")
+	assert.Error(t, err)
+}
+
+func TestPutReadError(t *testing.T) {
+	c := cache.New(t.TempDir())
+	err := c.Put(testSHA, &errorReader{})
+	assert.Error(t, err)
+	assert.False(t, c.Has(testSHA))
+}
+
+type errorReader struct{}
+
+func (e *errorReader) Read(p []byte) (int, error) {
+	return 0, io.ErrUnexpectedEOF
 }
