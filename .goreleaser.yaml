@@ -1,6 +1,6 @@
 version: 2
 
-project_name: sctl
+project_name: skm
 
 before:
   hooks:
@@ -8,9 +8,9 @@ before:
     - go generate ./...
 
 builds:
-  - id: sctl
-    main: ./cmd/sctl
-    binary: sctl
+  - id: skm
+    main: ./cmd/skm
+    binary: skm
     env:
       - CGO_ENABLED=0
     goos:
@@ -27,7 +27,7 @@ builds:
       - -X github.com/domehahn/sctl/internal/cli.Date={{.Date}}
 
 archives:
-  - id: sctl
+  - id: skm
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     format_overrides:
       - goos: windows

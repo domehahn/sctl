@@ -18,12 +18,12 @@ import (
 func newInitCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "init",
-		Short: "Initialize sctl config, a project lockfile, or a new skill",
-		Long: `Scaffold sctl configuration and project files interactively.
+		Short: "Initialize skm config, a project lockfile, or a new skill",
+		Long: `Scaffold skm configuration and project files interactively.
 
-  sctl init config          — create ~/.config/sctl/config.yaml
-  sctl init project         — create agent-skills.lock in the current directory
-  sctl init skill <name>    — scaffold a new skill directory`,
+  skm init config          — create ~/.config/skm/config.yaml
+  skm init project         — create agent-skills.lock in the current directory
+  skm init skill <name>    — scaffold a new skill directory`,
 	}
 	cmd.AddCommand(newInitConfigCmd())
 	cmd.AddCommand(newInitProjectCmd())
@@ -31,13 +31,13 @@ func newInitCmd() *cobra.Command {
 	return cmd
 }
 
-// ── sctl init config ──────────────────────────────────────────────────────
+// ── skm init config ──────────────────────────────────────────────────────
 
 func newInitConfigCmd() *cobra.Command {
 	var force bool
 	cmd := &cobra.Command{
 		Use:   "config",
-		Short: "Create ~/.config/sctl/config.yaml interactively",
+		Short: "Create ~/.config/skm/config.yaml interactively",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfgPath, err := configFilePath()
 			if err != nil {
@@ -53,7 +53,7 @@ func newInitConfigCmd() *cobra.Command {
 			}
 
 			p := newPrompter(cmd)
-			p.header("sctl config init")
+			p.header("skm config init")
 			p.print("This creates %s\n\n", cfgPath)
 
 			registryType := p.choose("Registry type", []string{"gitlab", "github", "artifactory", "local"})
@@ -74,8 +74,8 @@ func newInitConfigCmd() *cobra.Command {
 				registryURL = p.ask("Base directory path", "./agent-skills-local")
 			}
 
-			token := p.secret("Token (leave empty to set via SCTL_REGISTRY_TOKEN later)")
-			cacheDir := p.ask("Cache directory", "~/.cache/sctl")
+			token := p.secret("Token (leave empty to set via SKM_REGISTRY_TOKEN later)")
+			cacheDir := p.ask("Cache directory", "~/.cache/skm")
 
 			cfg := buildConfigYAML(registryName, registryType, registryURL, registryProject, token, cacheDir)
 
@@ -90,7 +90,7 @@ func newInitConfigCmd() *cobra.Command {
 			p.print("  Default registry: %s\n", registryName)
 			if token == "" {
 				p.print("\n  Token not set — export when needed:\n")
-				p.print("  export SCTL_REGISTRY_TOKEN=<your-token>\n")
+				p.print("  export SKM_REGISTRY_TOKEN=<your-token>\n")
 			}
 			return nil
 		},
@@ -99,17 +99,17 @@ func newInitConfigCmd() *cobra.Command {
 	return cmd
 }
 
-// ── sctl init project ─────────────────────────────────────────────────────
+// ── skm init project ─────────────────────────────────────────────────────
 
 const gitignoreBlock = `
-# sctl — installed skill directories are generated artifacts
-# restore with: sctl install
+# skm — installed skill directories are generated artifacts
+# restore with: skm install
 .claude/skills/
 skills/
 .agents/skills/
 .github/skills/
 
-# sctl — these files must be committed
+# skm — these files must be committed
 # !agent-skills.yaml
 # !agent-skills.lock
 `
@@ -151,7 +151,7 @@ func newInitProjectCmd() *cobra.Command {
 			}
 
 			fmt.Fprintf(cmd.OutOrStdout(), "\n  Add skills with:\n")
-			fmt.Fprintf(cmd.OutOrStdout(), "  sctl add <skill>[@version] --source <registry>\n")
+			fmt.Fprintf(cmd.OutOrStdout(), "  skm add <skill>[@version] --source <registry>\n")
 			return nil
 		},
 	}
@@ -159,7 +159,7 @@ func newInitProjectCmd() *cobra.Command {
 	return cmd
 }
 
-// updateGitignore appends the sctl block to .gitignore if not already present.
+// updateGitignore appends the skm block to .gitignore if not already present.
 // Returns true if the file was modified.
 func updateGitignore(path string) (bool, error) {
 	existing, err := os.ReadFile(path)
@@ -167,7 +167,7 @@ func updateGitignore(path string) (bool, error) {
 		return false, err
 	}
 
-	if strings.Contains(string(existing), "sctl — installed skill directories") {
+	if strings.Contains(string(existing), "skm — installed skill directories") {
 		return false, nil
 	}
 
@@ -185,7 +185,7 @@ func updateGitignore(path string) (bool, error) {
 	return err == nil, err
 }
 
-// ── sctl init skill ───────────────────────────────────────────────────────
+// ── skm init skill ───────────────────────────────────────────────────────
 
 func newInitSkillCmd() *cobra.Command {
 	var outputDir string
@@ -212,7 +212,7 @@ func newInitSkillCmd() *cobra.Command {
 			}
 
 			p := newPrompter(cmd)
-			p.header("sctl skill init")
+			p.header("skm skill init")
 
 			description := p.ask("Description", "A specialized skill for "+name)
 			version := p.ask("Initial version", "0.1.0")
@@ -259,8 +259,8 @@ func newInitSkillCmd() *cobra.Command {
 			}
 			p.print("\nNext steps:\n")
 			p.print("  1. Edit %s/SKILL.md with your skill's instructions\n", name)
-			p.print("  2. sctl validate %s\n", skillDir)
-			p.print("  3. sctl package  %s\n", skillDir)
+			p.print("  2. skm validate %s\n", skillDir)
+			p.print("  3. skm package  %s\n", skillDir)
 			return nil
 		},
 	}
@@ -351,13 +351,13 @@ func (p *prompter) multiChoose(label string, _ []string, defaults []string) []st
 
 func configFilePath() (string, error) {
 	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
-		return filepath.Join(xdg, "sctl", "config.yaml"), nil
+		return filepath.Join(xdg, "skm", "config.yaml"), nil
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".config", "sctl", "config.yaml"), nil
+	return filepath.Join(home, ".config", "skm", "config.yaml"), nil
 }
 
 func writeAtomic(path, content string) error {
@@ -395,7 +395,7 @@ func buildConfigYAML(name, regType, url, project, token, cacheDir string) string
 	if token != "" {
 		sb.WriteString("    token: " + token + "\n")
 	} else {
-		sb.WriteString("    token: \"\"  # set via SCTL_REGISTRY_TOKEN\n")
+		sb.WriteString("    token: \"\"  # set via SKM_REGISTRY_TOKEN\n")
 	}
 	return sb.String()
 }

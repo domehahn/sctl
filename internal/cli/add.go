@@ -162,8 +162,8 @@ func downloadAndVerify(ctx context.Context, reg registry.Registry, artifact *reg
 		return c.Path(artifact.SHA256), artifact.SHA256, nil
 	}
 
-	tmp := filepath.Join(os.TempDir(), "sctl-download-*.zip")
-	f, err := os.CreateTemp("", "sctl-download-*.zip")
+	tmp := filepath.Join(os.TempDir(), "skm-download-*.zip")
+	f, err := os.CreateTemp("", "skm-download-*.zip")
 	if err != nil {
 		return "", "", fmt.Errorf("create temp: %w", err)
 	}
@@ -243,8 +243,8 @@ func readCompatibleWith(zipPath string) ([]skill.Platform, error) {
 // atomicUnzipPublic delegates to the installer package's internal function
 // by re-using the same logic via the public Install path.
 func atomicUnzipPublic(zipPath, destDir string) error {
-	stagingDir := destDir + "~sctl-stage"
-	backupDir := destDir + "~sctl-bak"
+	stagingDir := destDir + "~skm-stage"
+	backupDir := destDir + "~skm-bak"
 
 	if err := unzipDir(zipPath, stagingDir); err != nil {
 		os.RemoveAll(stagingDir)

@@ -10,20 +10,20 @@ Think `npm` or `cargo`, but for agent skills.
 
 Agent skills are SKILL.md files that give coding assistants domain-specific knowledge — security policy reviewers, documentation checkers, framework-specific guides. Without tooling they tend to be copy-pasted across repos, drift out of sync, and have no integrity guarantees.
 
-`sctl` treats skills like software:
+`skm` treats skills like software:
 
 - **Version-pinned** — `agent-skills.lock` records exact versions and SHA256 checksums
 - **Reproducible** — any CI run installs the exact same bytes
 - **Multi-platform** — one install writes to all compatible platform paths automatically
 - **Auditable** — every artifact is verified before it touches disk
-- **Recoverable** — deleted lockfile? `sctl install` regenerates it from `agent-skills.yaml`
+- **Recoverable** — deleted lockfile? `skm install` regenerates it from `agent-skills.yaml`
 
 ---
 
 ## Install
 
 ```bash
-go install github.com/domehahn/sctl/cmd/sctl@latest
+go install github.com/domehahn/sctl/cmd/skm@latest
 ```
 
 Or download a pre-built binary from the [releases page](https://github.com/domehahn/sctl/releases).
@@ -33,42 +33,42 @@ Or download a pre-built binary from the [releases page](https://github.com/domeh
 ## Quick Start
 
 ```bash
-# 1 — set up sctl for the first time
-sctl init config
+# 1 — set up skm for the first time
+skm init config
 
 # 2 — initialize a project
-sctl init project
+skm init project
 
 # 3 — add skills
-sctl add gitlab-policy-reviewer@1.5.0 --source myregistry
-sctl add documentation-reviewer       --source myregistry
+skm add gitlab-policy-reviewer@1.5.0 --source myregistry
+skm add documentation-reviewer       --source myregistry
 
 # 4 — commit both files
 git add agent-skills.yaml agent-skills.lock
 git commit -m "add agent skills"
 
 # 5 — any machine, any time
-sctl install
+skm install
 ```
 
 ---
 
 ## Two-File Model
 
-`sctl` uses two files, both committed to Git — similar to Poetry:
+`skm` uses two files, both committed to Git — similar to Poetry:
 
 | File | Analogy | Purpose |
 | --- | --- | --- |
 | `agent-skills.yaml` | `pyproject.toml` | Manifest: which skills you want (human-edited) |
 | `agent-skills.lock` | `poetry.lock` | Lockfile: exact versions + SHA256 (generated) |
 
-`sctl install` behaviour:
+`skm install` behaviour:
 
 - **Lockfile present** → installs exactly what is pinned (fast, deterministic)
 - **Lockfile missing**, manifest present → resolves versions from registry, generates lockfile, installs
 - **Both missing** → error with instructions
 
-This means a deleted lockfile is never a problem: `sctl install` regenerates it from `agent-skills.yaml` automatically.
+This means a deleted lockfile is never a problem: `skm install` regenerates it from `agent-skills.yaml` automatically.
 
 **`agent-skills.yaml`** (what you declare):
 
@@ -102,54 +102,54 @@ skills:
 
 ## Commands
 
-### `sctl init`
+### `skm init`
 
-Scaffold sctl configuration and project files interactively.
+Scaffold skm configuration and project files interactively.
 
-#### `sctl init config`
+#### `skm init config`
 
-Creates `~/.config/sctl/config.yaml` via an interactive wizard.
+Creates `~/.config/skm/config.yaml` via an interactive wizard.
 
 ```
-sctl init config [--force]
+skm init config [--force]
 ```
 
 Asks for registry type, URL, project path, and token (masked input). Running it again without `--force` is a no-op if the file already exists.
 
-#### `sctl init project`
+#### `skm init project`
 
 Creates `agent-skills.yaml`, `agent-skills.lock`, and updates `.gitignore`.
 
 ```
-sctl init project [--force]
+skm init project [--force]
 ```
 
 The `.gitignore` update excludes installed skill directories (generated artifacts) and adds a comment that both `agent-skills.yaml` and `agent-skills.lock` must be committed.
 
-#### `sctl init skill <name>`
+#### `skm init skill <name>`
 
 Scaffolds a complete, immediately valid skill directory.
 
 ```
-sctl init skill my-skill
-sctl init skill my-skill --output-dir ./skills
+skm init skill my-skill
+skm init skill my-skill --output-dir ./skills
 ```
 
-Asks for description, version, owner, and compatible platforms. The generated skill passes `sctl validate` out of the box.
+Asks for description, version, owner, and compatible platforms. The generated skill passes `skm validate` out of the box.
 
 ---
 
-### `sctl config`
+### `skm config`
 
-Inspect and validate the sctl configuration.
+Inspect and validate the skm configuration.
 
-#### `sctl config validate`
+#### `skm config validate`
 
-Validates `~/.config/sctl/config.yaml`.
+Validates `~/.config/skm/config.yaml`.
 
 ```
-sctl config validate
-sctl config validate --path ./custom-config.yaml
+skm config validate
+skm config validate --path ./custom-config.yaml
 ```
 
 Checks:
@@ -161,28 +161,28 @@ Checks:
 - `github` registries have `url` in `owner/repo` format (not a full URL)
 - `artifactory` registries have `url` in `<base-url>#<repo-name>` format
 
-#### `sctl config show`
+#### `skm config show`
 
 Prints the resolved config with all environment variable overrides applied. Tokens are masked as `***`.
 
 ```
-sctl config show
-sctl config show --output json
+skm config show
+skm config show --output json
 ```
 
 ---
 
-### `sctl install`
+### `skm install`
 
 Installs all skills. Generates `agent-skills.lock` from `agent-skills.yaml` if the lockfile is missing.
 
 ```
-sctl install [--lock <path>] [--dry-run] [--concurrency N]
+skm install [--lock <path>] [--dry-run] [--concurrency N]
 ```
 
 - Downloads artifacts in parallel (default 4 concurrent)
 - Verifies SHA256 before writing anything to disk
-- Uses a local cache (`~/.cache/sctl/`) — re-runs are instant
+- Uses a local cache (`~/.cache/skm/`) — re-runs are instant
 - Atomic installs: staging directory → rename, never partial state
 - `--dry-run` prints what would be installed without writing files
 
@@ -197,13 +197,13 @@ sctl install [--lock <path>] [--dry-run] [--concurrency N]
 
 ---
 
-### `sctl add <skill[@version]>`
+### `skm add <skill[@version]>`
 
 Resolves, downloads, and installs a skill, then updates both `agent-skills.yaml` and `agent-skills.lock`.
 
 ```
-sctl add gitlab-policy-reviewer@1.5.0 --source myregistry
-sctl add documentation-reviewer       --source myregistry
+skm add gitlab-policy-reviewer@1.5.0 --source myregistry
+skm add documentation-reviewer       --source myregistry
 ```
 
 - Version defaults to latest if omitted
@@ -212,13 +212,13 @@ sctl add documentation-reviewer       --source myregistry
 
 ---
 
-### `sctl validate [path]`
+### `skm validate [path]`
 
 Validates a skill directory structure. Default path is the current directory.
 
 ```
-sctl validate ./skills/gitlab-policy-reviewer
-sctl validate --output json
+skm validate ./skills/gitlab-policy-reviewer
+skm validate --output json
 ```
 
 Checks:
@@ -233,13 +233,13 @@ Exits `0` if valid, `1` if errors are found. Warnings do not fail the check.
 
 ---
 
-### `sctl package [path]`
+### `skm package [path]`
 
 Packages a skill directory into a distributable ZIP artifact.
 
 ```
-sctl package ./skills/gitlab-policy-reviewer
-sctl package ./skills/gitlab-policy-reviewer --output-dir ./dist
+skm package ./skills/gitlab-policy-reviewer
+skm package ./skills/gitlab-policy-reviewer --output-dir ./dist
 ```
 
 - Runs `validate` first — packaging fails if the skill is invalid
@@ -249,11 +249,11 @@ sctl package ./skills/gitlab-policy-reviewer --output-dir ./dist
 
 ---
 
-### `sctl version`
+### `skm version`
 
 ```
-sctl version
-sctl version --output json
+skm version
+skm version --output json
 ```
 
 ---
@@ -276,16 +276,16 @@ All commands support `--output json` for machine-readable output — useful in C
 ### First-time setup
 
 ```bash
-sctl init config      # create ~/.config/sctl/config.yaml
-sctl config validate  # verify it's correct
+skm init config      # create ~/.config/skm/config.yaml
+skm config validate  # verify it's correct
 ```
 
 ### Start a new project
 
 ```bash
-sctl init project                                          # agent-skills.yaml + agent-skills.lock + .gitignore
-sctl add gitlab-policy-reviewer@1.5.0 --source myregistry # updates both files, installs skill
-sctl add documentation-reviewer       --source myregistry
+skm init project                                          # agent-skills.yaml + agent-skills.lock + .gitignore
+skm add gitlab-policy-reviewer@1.5.0 --source myregistry # updates both files, installs skill
+skm add documentation-reviewer       --source myregistry
 git add agent-skills.yaml agent-skills.lock .gitignore
 git commit -m "add agent skills"
 ```
@@ -294,23 +294,23 @@ git commit -m "add agent skills"
 
 ```bash
 git clone <repo>
-sctl install          # reads agent-skills.lock, installs everything
+skm install          # reads agent-skills.lock, installs everything
 ```
 
 ### Recover a deleted lockfile
 
 ```bash
 rm agent-skills.lock  # oops
-sctl install          # regenerates agent-skills.lock from agent-skills.yaml, then installs
+skm install          # regenerates agent-skills.lock from agent-skills.yaml, then installs
 ```
 
 ### Author and publish a new skill
 
 ```bash
-sctl init skill my-skill --output-dir ./skills
+skm init skill my-skill --output-dir ./skills
 # edit skills/my-skill/SKILL.md
-sctl validate skills/my-skill
-sctl package  skills/my-skill --output-dir dist/
+skm validate skills/my-skill
+skm package  skills/my-skill --output-dir dist/
 # upload dist/my-skill-0.1.0.zip to your registry
 ```
 
@@ -349,19 +349,19 @@ Use `all` in `compatible_with` to install to every supported platform path.
 
 ## Configuration
 
-`sctl` reads `~/.config/sctl/config.yaml` (or `$XDG_CONFIG_HOME/sctl/config.yaml`).
+`skm` reads `~/.config/skm/config.yaml` (or `$XDG_CONFIG_HOME/skm/config.yaml`).
 
-Create it interactively with `sctl init config`, or write it manually:
+Create it interactively with `skm init config`, or write it manually:
 
 ```yaml
 default_registry: myregistry
-cache_dir: ~/.cache/sctl
+cache_dir: ~/.cache/skm
 
 registries:
   myregistry:
     type: artifactory
     url: https://artifactory.company.com/artifactory#agent-skills
-    token: ""           # set via SCTL_REGISTRY_TOKEN
+    token: ""           # set via SKM_REGISTRY_TOKEN
 
   company-github:
     type: github
@@ -388,19 +388,19 @@ registries:
 
 | Variable | Overrides |
 | --- | --- |
-| `SCTL_CACHE_DIR` | `cache_dir` |
-| `SCTL_LOG_LEVEL` | `log_level` |
-| `SCTL_REGISTRY_TOKEN` | Token for the `default_registry` |
+| `SKM_CACHE_DIR` | `cache_dir` |
+| `SKM_LOG_LEVEL` | `log_level` |
+| `SKM_REGISTRY_TOKEN` | Token for the `default_registry` |
 
 ---
 
 ## Git Integration
 
-`sctl init project` writes the following to `.gitignore` automatically:
+`skm init project` writes the following to `.gitignore` automatically:
 
 ```gitignore
 # sctl — installed skill directories are generated artifacts
-# restore with: sctl install
+# restore with: skm install
 .claude/skills/
 skills/
 .agents/skills/
@@ -421,25 +421,25 @@ Installed skill directories are generated artifacts — they are excluded from G
 # .gitlab-ci.yml
 install-skills:
   script:
-    - sctl install --concurrency 8
+    - skm install --concurrency 8
   cache:
     key: sctl-$CI_COMMIT_REF_SLUG
     paths:
-      - ~/.cache/sctl/
+      - ~/.cache/skm/
 ```
 
 ```yaml
 # .github/workflows/skills.yml
 - name: Install agent skills
-  run: sctl install
+  run: skm install
   env:
-    SCTL_REGISTRY_TOKEN: ${{ secrets.SKILLS_REGISTRY_TOKEN }}
+    SKM_REGISTRY_TOKEN: ${{ secrets.SKILLS_REGISTRY_TOKEN }}
 ```
 
 For JSON output in CI (e.g. to feed into jq):
 
 ```bash
-sctl install --output json | jq '.data.installed[]'
+skm install --output json | jq '.data.installed[]'
 ```
 
 ---
@@ -467,7 +467,7 @@ make release-snapshot    # requires goreleaser
 **Project layout:**
 
 ```
-cmd/sctl/             # Entrypoint
+cmd/skm/             # Entrypoint
 internal/
   cli/                # Cobra commands
   config/             # Config loading + env override
@@ -487,7 +487,7 @@ examples/             # Ready-to-use skill examples and CI templates
 
 ## Security
 
-Skills are supply-chain artifacts. `sctl` enforces:
+Skills are supply-chain artifacts. `skm` enforces:
 
 - **SHA256 verification** on every download before writing to disk
 - **Zip-slip protection** — path traversal in ZIP entries is rejected

@@ -5,30 +5,30 @@ stages:
   - release
 
 variables:
-  SCTL_VERSION: "1.0.0"
-  SCTL_CACHE_DIR: "$CI_PROJECT_DIR/.cache/sctl"
+  SKM_VERSION: "1.0.0"
+  SKM_CACHE_DIR: "$CI_PROJECT_DIR/.cache/skm"
 
-# ── Install sctl once and cache it ──────────────────────────────────────────
+# ── Install skm once and cache it ──────────────────────────────────────────
 
-.sctl-setup: &sctl-setup
+.skm-setup: &skm-setup
   before_script:
     - |
-      if ! command -v sctl &>/dev/null; then
-        curl -sSL "https://github.com/domehahn/sctl/releases/download/v${SCTL_VERSION}/sctl_${SCTL_VERSION}_linux_amd64.tar.gz" \
-          | tar -xz -C /usr/local/bin sctl
+      if ! command -v skm &>/dev/null; then
+        curl -sSL "https://github.com/domehahn/sctl/releases/download/v${SKM_VERSION}/skm_${SKM_VERSION}_linux_amd64.tar.gz" \
+          | tar -xz -C /usr/local/bin skm
       fi
 
 # ── Install skills from lockfile ────────────────────────────────────────────
 
 install-skills:
   stage: skills
-  <<: *sctl-setup
+  <<: *skm-setup
   script:
-    - sctl install --concurrency 8
+    - skm install --concurrency 8
   cache:
-    key: "sctl-cache-$CI_COMMIT_REF_SLUG"
+    key: "skm-cache-$CI_COMMIT_REF_SLUG"
     paths:
-      - .cache/sctl/
+      - .cache/skm/
   artifacts:
     paths:
       - skills/
@@ -43,13 +43,13 @@ install-skills:
 
 validate-skills:
   stage: validate
-  <<: *sctl-setup
+  <<: *skm-setup
   script:
     - |
       EXIT=0
       for dir in skills/*/; do
         echo "--- Validating $dir"
-        sctl validate "$dir" --output json | tee /tmp/result.json
+        skm validate "$dir" --output json | tee /tmp/result.json
         if [ "$(jq '.success' /tmp/result.json)" != "true" ]; then
           EXIT=1
         fi
@@ -64,15 +64,15 @@ validate-skills:
 
 package-and-publish:
   stage: release
-  <<: *sctl-setup
+  <<: *skm-setup
   script:
     - SKILL_NAME=$(echo "$CI_COMMIT_TAG" | cut -d'/' -f1)
     - SKILL_VERSION=$(echo "$CI_COMMIT_TAG" | sed 's|.*/v||')
-    - sctl validate "skills/$SKILL_NAME"
-    - sctl package "skills/$SKILL_NAME" --output-dir dist/
+    - skm validate "skills/$SKILL_NAME"
+    - skm package "skills/$SKILL_NAME" --output-dir dist/
     - |
       # Upload to Artifactory
-      SHA256=$(sctl package "skills/$SKILL_NAME" --output-dir /tmp --output json | jq -r '.data.sha256')
+      SHA256=$(skm package "skills/$SKILL_NAME" --output-dir /tmp --output json | jq -r '.data.sha256')
       curl -u "$ARTIFACTORY_USER:$ARTIFACTORY_TOKEN" \
         -T "dist/${SKILL_NAME}-${SKILL_VERSION}.zip" \
         "$ARTIFACTORY_URL/agent-skills/${SKILL_NAME}/${SKILL_VERSION}/${SKILL_NAME}-${SKILL_VERSION}.zip"

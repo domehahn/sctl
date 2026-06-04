@@ -1,13 +1,13 @@
 .PHONY: build test test-integration lint clean install release-snapshot
 
-BINARY   := sctl
+BINARY   := skm
 DIST_DIR := dist
 MODULE   := github.com/domehahn/sctl
 VERSION  ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS  := -ldflags "-X $(MODULE)/internal/cli.Version=$(VERSION) -s -w"
 
 build:
-	go build $(LDFLAGS) -o $(DIST_DIR)/$(BINARY) ./cmd/sctl
+	go build $(LDFLAGS) -o $(DIST_DIR)/$(BINARY) ./cmd/skm
 
 test:
 	go test -race -timeout 60s ./...

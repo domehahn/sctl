@@ -1,6 +1,6 @@
 # Examples
 
-Concrete, copy-paste-ready examples for common `sctl` workflows.
+Concrete, copy-paste-ready examples for common `skm` workflows.
 
 ## Directory Layout
 
@@ -14,7 +14,7 @@ examples/
     agent-skills.lock           # Example lockfile for a project consuming skills
     catalog.yaml                # Skill catalog index for a skills monorepo
   config/
-    config.yaml                 # Annotated sctl config with all registry types
+    config.yaml                 # Annotated skm config with all registry types
   ci/
     .gitlab-ci.yml              # GitLab CI: install, validate, package, publish
     github-actions.yml          # GitHub Actions: install, validate, release
@@ -30,7 +30,7 @@ Copy `examples/project/agent-skills.lock` to your project root, adjust the
 skill names, versions, SHA256s, and source URLs, then:
 
 ```bash
-sctl install
+skm install
 ```
 
 Commit `agent-skills.lock`. Never commit the installed `skills/` or `.agents/skills/` directories.
@@ -44,14 +44,14 @@ cp -r examples/skills/gitlab-policy-reviewer my-new-skill
 cd my-new-skill
 
 # Edit SKILL.md, skill.yaml, VERSION, CHANGELOG.md
-sctl validate .
+skm validate .
 ```
 
 ### 3 — Packaging a skill for distribution
 
 ```bash
-sctl validate ./my-new-skill
-sctl package ./my-new-skill --output-dir ./dist
+skm validate ./my-new-skill
+skm package ./my-new-skill --output-dir ./dist
 # → dist/my-new-skill-1.0.0.zip  (SHA256 printed)
 ```
 

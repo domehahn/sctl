@@ -28,13 +28,13 @@ func TestLoadFromFile(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", dir)
 
-	cfgDir := filepath.Join(dir, "sctl")
+	cfgDir := filepath.Join(dir, "skm")
 	require.NoError(t, os.MkdirAll(cfgDir, 0o755))
 
 	data, _ := yaml.Marshal(map[string]any{
 		"log_level":   "debug",
 		"concurrency": 8,
-		"cache_dir":   "/tmp/sctl-cache",
+		"cache_dir":   "/tmp/skm-cache",
 	})
 	require.NoError(t, os.WriteFile(filepath.Join(cfgDir, "config.yaml"), data, 0o644))
 
@@ -42,13 +42,13 @@ func TestLoadFromFile(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "debug", cfg.LogLevel)
 	assert.Equal(t, 8, cfg.Concurrency)
-	assert.Equal(t, "/tmp/sctl-cache", cfg.CacheDir)
+	assert.Equal(t, "/tmp/skm-cache", cfg.CacheDir)
 }
 
 func TestEnvOverrides(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	t.Setenv("SCTL_CACHE_DIR", "/env/cache")
-	t.Setenv("SCTL_LOG_LEVEL", "warn")
+	t.Setenv("SKM_CACHE_DIR", "/env/cache")
+	t.Setenv("SKM_LOG_LEVEL", "warn")
 
 	cfg, err := Load()
 	require.NoError(t, err)
@@ -59,9 +59,9 @@ func TestEnvOverrides(t *testing.T) {
 func TestEnvRegistryTokenOverride(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", dir)
-	t.Setenv("SCTL_REGISTRY_TOKEN", "secret-token")
+	t.Setenv("SKM_REGISTRY_TOKEN", "secret-token")
 
-	cfgDir := filepath.Join(dir, "sctl")
+	cfgDir := filepath.Join(dir, "skm")
 	require.NoError(t, os.MkdirAll(cfgDir, 0o755))
 
 	data, _ := yaml.Marshal(map[string]any{

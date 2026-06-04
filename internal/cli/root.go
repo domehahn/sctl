@@ -52,12 +52,12 @@ var (
 
 func NewRootCmd() *cobra.Command {
 	root := &cobra.Command{
-		Use:   "sctl",
+		Use:   "skm",
 		Short: "Skill Control — AI agent skill package manager",
-		Long: `sctl manages AI agent skills as versioned software artifacts.
+		Long: `skm manages AI agent skills as versioned software artifacts.
 
 Skills are SKILL.md-based capability bundles for Claude Code, GitLab Duo,
-GitHub Copilot, and Codex. sctl installs, validates, and packages them.`,
+GitHub Copilot, and Codex. skm installs, validates, and packages them.`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
@@ -86,7 +86,7 @@ func newVersionCmd() *cobra.Command {
 	var debugBuildInfo bool
 	c := &cobra.Command{
 		Use:   "version",
-		Short: "Print sctl version information",
+		Short: "Print skm version information",
 		Run: func(cmd *cobra.Command, args []string) {
 			if debugBuildInfo {
 				info, ok := debug.ReadBuildInfo()
@@ -114,7 +114,7 @@ func newVersionCmd() *cobra.Command {
 				})
 				return
 			}
-			cmd.Printf("sctl %s (commit %s, built %s)\n", Version, Commit, Date)
+			cmd.Printf("skm %s (commit %s, built %s)\n", Version, Commit, Date)
 		},
 	}
 	c.Flags().BoolVar(&debugBuildInfo, "debug-build-info", false, "")

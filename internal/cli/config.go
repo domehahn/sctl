@@ -13,18 +13,18 @@ import (
 func newConfigCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "config",
-		Short: "Manage sctl configuration",
-		Long: `Inspect and validate the sctl configuration file.
+		Short: "Manage skm configuration",
+		Long: `Inspect and validate the skm configuration file.
 
-  sctl config validate    — validate ~/.config/sctl/config.yaml
-  sctl config show        — print the resolved config (tokens masked)`,
+  skm config validate    — validate ~/.config/skm/config.yaml
+  skm config show        — print the resolved config (tokens masked)`,
 	}
 	cmd.AddCommand(newConfigValidateCmd())
 	cmd.AddCommand(newConfigShowCmd())
 	return cmd
 }
 
-// ── sctl config validate ──────────────────────────────────────────────────
+// ── skm config validate ──────────────────────────────────────────────────
 
 type configError struct {
 	Field   string
@@ -35,7 +35,7 @@ func newConfigValidateCmd() *cobra.Command {
 	var cfgPath string
 	cmd := &cobra.Command{
 		Use:   "validate",
-		Short: "Validate the sctl config file",
+		Short: "Validate the skm config file",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			format := outputFormat()
 
@@ -46,7 +46,7 @@ func newConfigValidateCmd() *cobra.Command {
 
 			if _, err := os.Stat(path); os.IsNotExist(err) {
 				return &UserError{Message: fmt.Sprintf(
-					"config not found: %s\nRun 'sctl init config' to create one.", path,
+					"config not found: %s\nRun 'skm init config' to create one.", path,
 				)}
 			}
 
@@ -83,7 +83,7 @@ func newConfigValidateCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&cfgPath, "path", "", "Path to config file (default: ~/.config/sctl/config.yaml)")
+	cmd.Flags().StringVar(&cfgPath, "path", "", "Path to config file (default: ~/.config/skm/config.yaml)")
 	return cmd
 }
 
@@ -164,7 +164,7 @@ func validateRegistryConfig(name string, rc config.RegistryConfig) []configError
 	return errs
 }
 
-// ── sctl config show ──────────────────────────────────────────────────────
+// ── skm config show ──────────────────────────────────────────────────────
 
 func newConfigShowCmd() *cobra.Command {
 	var cfgPath string
@@ -181,7 +181,7 @@ func newConfigShowCmd() *cobra.Command {
 
 			if _, err := os.Stat(path); os.IsNotExist(err) {
 				return &UserError{Message: fmt.Sprintf(
-					"config not found: %s\nRun 'sctl init config' to create one.", path,
+					"config not found: %s\nRun 'skm init config' to create one.", path,
 				)}
 			}
 
@@ -207,7 +207,7 @@ func newConfigShowCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&cfgPath, "path", "", "Path to config file (default: ~/.config/sctl/config.yaml)")
+	cmd.Flags().StringVar(&cfgPath, "path", "", "Path to config file (default: ~/.config/skm/config.yaml)")
 	return cmd
 }
 

@@ -1,5 +1,5 @@
-# sctl configuration — place at ~/.config/sctl/config.yaml
-# All token fields can be left empty and set via SCTL_REGISTRY_TOKEN instead.
+# skm configuration — place at ~/.config/skm/config.yaml
+# All token fields can be left empty and set via SKM_REGISTRY_TOKEN instead.
 
 # ── Pattern A: Skills in einem GitLab-Monorepo ────────────────────────────
 #
@@ -7,8 +7,8 @@
 # Tag-Konvention: <skill-name>/v<version>
 # Bsp: gitlab-policy-reviewer/v1.5.0
 #
-# sctl add gitlab-policy-reviewer@1.5.0 --source company-skills
-# sctl add documentation-reviewer       --source company-skills
+# skm add gitlab-policy-reviewer@1.5.0 --source company-skills
+# skm add documentation-reviewer       --source company-skills
 
 default_registry: company-skills
 
@@ -17,7 +17,7 @@ registries:
     type: gitlab
     url: https://gitlab.company.com       # GitLab-Instanz-URL
     project: platform/agent-skills        # namespace/project des Monorepos
-    token: ""                             # → SCTL_REGISTRY_TOKEN
+    token: ""                             # → SKM_REGISTRY_TOKEN
 
 ---
 # ── Pattern B: Jeder Skill in einem eigenen GitLab-Repo ──────────────────
@@ -25,10 +25,10 @@ registries:
 # Skills haben separate Repos mit eigenem Lifecycle und eigenen Ownern.
 # Tag-Konvention pro Repo: v<version>  (kein Skill-Name-Prefix nötig)
 #
-# sctl add gitlab-policy-reviewer@1.5.0 --source policy-skill
-# sctl add documentation-reviewer@2.1.0 --source docs-skill
+# skm add gitlab-policy-reviewer@1.5.0 --source policy-skill
+# skm add documentation-reviewer@2.1.0 --source docs-skill
 #
-# Für sctl install spielt das Layout keine Rolle —
+# Für skm install spielt das Layout keine Rolle —
 # die source_url im Lockfile enthält die direkte Download-URL.
 
 default_registry: policy-skill
@@ -58,9 +58,9 @@ registries:
 # Unternehmens-Skills auf Self-Hosted GitLab, Open-Source-Skills via GitHub,
 # gepackte Binaries via Artifactory.
 #
-# sctl add my-internal-skill --source internal-gitlab
-# sctl add some-oss-skill    --source oss-github
-# sctl add certified-skill   --source artifactory
+# skm add my-internal-skill --source internal-gitlab
+# skm add some-oss-skill    --source oss-github
+# skm add certified-skill   --source artifactory
 
 default_registry: internal-gitlab
 
@@ -69,7 +69,7 @@ registries:
     type: gitlab
     url: https://gitlab.company.com
     project: platform/agent-skills
-    token: ""                             # → SCTL_REGISTRY_TOKEN
+    token: ""                             # → SKM_REGISTRY_TOKEN
 
   oss-github:
     type: github
