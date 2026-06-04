@@ -23,7 +23,7 @@ Agent skills are SKILL.md files that give coding assistants domain-specific know
 ## Install
 
 ```bash
-go install github.com/domehahn/sctl/cmd/skpm@latest
+go install github.com/domehahn/skpm/cmd/skpm@latest
 ```
 
 Or download a pre-built binary from the [releases page](https://github.com/domehahn/sctl/releases).
