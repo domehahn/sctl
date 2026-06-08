@@ -3,19 +3,26 @@ package cli
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
-	"github.com/domehahn/sctl/internal/cache"
-	"github.com/domehahn/sctl/internal/config"
-	"github.com/domehahn/sctl/internal/installer"
-	"github.com/domehahn/sctl/internal/lockfile"
-	"github.com/domehahn/sctl/internal/manifest"
-	"github.com/domehahn/sctl/internal/registry"
+	"github.com/domehahn/skpm/internal/cache"
+	"github.com/domehahn/skpm/internal/config"
+	"github.com/domehahn/skpm/internal/installer"
+	"github.com/domehahn/skpm/internal/lockfile"
+	"github.com/domehahn/skpm/internal/manifest"
+	"github.com/domehahn/skpm/internal/registry"
+	"github.com/domehahn/skpm/internal/skill"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
 
 func newInstallCmd() *cobra.Command {
 	var lockPath string
+	var frozenLockfile bool
+	var check bool
+	var prune bool
+	var platform string
+	var target string
 
 	cmd := &cobra.Command{
 		Use:   "install",
@@ -36,13 +43,34 @@ versions from the registry, generates a new agent-skills.lock, and installs.`,
 			if lockPath == "" {
 				lockPath = lockfile.DefaultFilename
 			}
+			if frozenLockfile {
+				outdated, err := lockfileOutdated(cmd.Context(), cfg, manifest.DefaultFilename, lockPath)
+				if err != nil {
+					return &UserError{Message: fmt.Sprintf("check lockfile: %v", err)}
+				}
+				if outdated {
+					return &UserError{Message: fmt.Sprintf("%s is inconsistent with %s", lockPath, manifest.DefaultFilename)}
+				}
+			}
 
 			lf, err := resolveLockfile(cmd, lockPath, cfg)
 			if err != nil {
 				return err
 			}
+			if platform != "" {
+				filterLockfileForPlatform(lf, platform)
+			}
+			fillMissingInstallPaths(lf)
 			if len(lf.Skills) == 0 {
 				fmt.Fprintln(cmd.OutOrStdout(), "Nothing to install.")
+				return nil
+			}
+			if check {
+				missing := missingInstallPaths(lf, target)
+				if len(missing) > 0 {
+					return &UserError{Message: fmt.Sprintf("installation incomplete:\n  %s", stringsJoin(missing, "\n  "))}
+				}
+				fmt.Fprintln(cmd.OutOrStdout(), "Installation is complete.")
 				return nil
 			}
 
@@ -50,6 +78,9 @@ versions from the registry, generates a new agent-skills.lock, and installs.`,
 			ins := installer.New(c)
 
 			workDir, _ := os.Getwd()
+			if target != "" {
+				workDir = target
+			}
 			opts := installer.Options{
 				DryRun:      globalDryRun,
 				Concurrency: globalConcurrency,
@@ -61,6 +92,11 @@ versions from the registry, generates a new agent-skills.lock, and installs.`,
 			result, err := ins.Install(cmd.Context(), lf, opts)
 			if err != nil {
 				return &InternalError{Message: "install failed", Cause: err}
+			}
+			if prune && !globalDryRun {
+				if err := pruneInstallPaths(workDir, lf); err != nil {
+					return &InternalError{Message: "prune installed skills", Cause: err}
+				}
 			}
 
 			if format == OutputJSON {
@@ -102,7 +138,61 @@ versions from the registry, generates a new agent-skills.lock, and installs.`,
 	}
 
 	cmd.Flags().StringVar(&lockPath, "lock", "", "Path to lockfile (default: agent-skills.lock)")
+	cmd.Flags().BoolVar(&frozenLockfile, "frozen-lockfile", false, "Fail if manifest and lockfile are inconsistent")
+	cmd.Flags().BoolVar(&check, "check", false, "Check whether locked skills are installed without writing files")
+	cmd.Flags().BoolVar(&prune, "prune", false, "Remove installed skills no longer present in the lockfile")
+	cmd.Flags().StringVar(&platform, "platform", "", "Install only skills compatible with a platform")
+	cmd.Flags().StringVar(&target, "target", "", "Install into a target directory")
 	return cmd
+}
+
+func filterLockfileForPlatform(lf *lockfile.LockFile, platform string) {
+	out := lf.Skills[:0]
+	for _, sl := range lf.Skills {
+		if len(sl.CompatibleWith) == 0 {
+			out = append(out, sl)
+			continue
+		}
+		for _, p := range sl.CompatibleWith {
+			if p == platform || p == "all" {
+				out = append(out, sl)
+				break
+			}
+		}
+	}
+	lf.Skills = out
+}
+
+func missingInstallPaths(lf *lockfile.LockFile, target string) []string {
+	workDir, _ := os.Getwd()
+	if target != "" {
+		workDir = target
+	}
+	var missing []string
+	for _, sl := range lf.Skills {
+		for _, p := range sl.InstalledTo {
+			if _, err := os.Stat(filepath.Join(workDir, p, "SKILL.md")); err != nil {
+				missing = append(missing, fmt.Sprintf("%s: %s", sl.Name, p))
+			}
+		}
+	}
+	return missing
+}
+
+func fillMissingInstallPaths(lf *lockfile.LockFile) {
+	for i := range lf.Skills {
+		if len(lf.Skills[i].InstalledTo) > 0 {
+			continue
+		}
+		platforms := stringsToPlatforms(lf.Skills[i].CompatibleWith)
+		if len(platforms) == 0 {
+			platforms = []skill.Platform{skill.PlatformAll}
+		}
+		paths, err := installer.ResolvePaths(lf.Skills[i].Name, platforms)
+		if err == nil {
+			lf.Skills[i].InstalledTo = paths
+		}
+	}
 }
 
 // resolveLockfile returns a ready-to-install LockFile.
@@ -123,7 +213,7 @@ func resolveLockfile(cmd *cobra.Command, lockPath string, cfg *config.Config) (*
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, &UserError{Message: fmt.Sprintf(
-				"neither %s nor %s found\nRun 'sctl init project' to get started.",
+				"neither %s nor %s found\nRun 'skpm init' to get started.",
 				lockPath, manifest.DefaultFilename,
 			)}
 		}

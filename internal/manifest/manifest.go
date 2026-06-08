@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 
 	"gopkg.in/yaml.v3"
 )
@@ -11,8 +12,8 @@ import (
 const DefaultFilename = "agent-skills.yaml"
 
 type ManifestFile struct {
-	Version int             `yaml:"version"`
-	Skills  []SkillEntry    `yaml:"skills"`
+	Version int          `yaml:"version"`
+	Skills  []SkillEntry `yaml:"skills"`
 }
 
 type SkillEntry struct {
@@ -41,6 +42,7 @@ func Read(path string) (*ManifestFile, error) {
 }
 
 func (m *ManifestFile) Write(path string) error {
+	m.Sort()
 	data, err := yaml.Marshal(m)
 	if err != nil {
 		return fmt.Errorf("marshal manifest: %w", err)
@@ -57,6 +59,12 @@ func (m *ManifestFile) Write(path string) error {
 		return fmt.Errorf("atomic rename manifest: %w", err)
 	}
 	return nil
+}
+
+func (m *ManifestFile) Sort() {
+	sort.SliceStable(m.Skills, func(i, j int) bool {
+		return m.Skills[i].Name < m.Skills[j].Name
+	})
 }
 
 func (m *ManifestFile) Upsert(entry SkillEntry) {

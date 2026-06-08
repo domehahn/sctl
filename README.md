@@ -26,7 +26,7 @@ Agent skills are SKILL.md files that give coding assistants domain-specific know
 go install github.com/domehahn/skpm/cmd/skpm@latest
 ```
 
-Or download a pre-built binary from the [releases page](https://github.com/domehahn/sctl/releases).
+Or download a pre-built binary from the [releases page](https://github.com/domehahn/skpm/releases).
 
 ---
 
@@ -53,10 +53,16 @@ skpm install
 ### As a skill author
 
 ```bash
-skpm init skill my-skill          # scaffold
-# edit my-skill/SKILL.md
-skpm publish my-skill --source myregistry   # validate → package → tag → upload
+skcr scaffold skill my-skill      # preferred scaffold owner
+skpm validate my-skill
+skpm version bump patch my-skill
+skpm package my-skill
+skpm publish my-skill --source myregistry
 ```
+
+`skpm init skill <name>` is still available as a compatibility wrapper, but
+new workflows should use `skcr scaffold skill <name>` and then use `skpm` for
+validation, versioning, packaging, publishing, installation, and updates.
 
 ---
 
@@ -125,6 +131,10 @@ skpm init [--force]
 #### `skpm init skill <name>`
 
 Scaffolds a complete, immediately valid skill directory.
+
+Compatibility note: this command remains for existing users. For new workflows,
+prefer `skcr scaffold skill <name>`. Use `skpm` for validation, versioning,
+packaging, publishing, and installation.
 
 ```bash
 skpm init skill my-skill
@@ -333,7 +343,16 @@ skpm add my-skill@1.5.0 --source company-gitlab
 ```bash
 skpm version
 skpm version --output json
+skpm version show ./skills/my-skill
+skpm version bump patch ./skills/my-skill
+skpm version bump minor ./skills/my-skill
+skpm version bump major ./skills/my-skill
+skpm version set 1.2.3 ./skills/my-skill
 ```
+
+Skill version commands read `VERSION` and `skill.yaml`, require them to match,
+store stable SemVer without a leading `v`, and ensure `CHANGELOG.md` contains
+an entry for the resulting version.
 
 ---
 
@@ -386,11 +405,19 @@ skpm install   # regenerates from agent-skills.yaml, then installs
 ### Author and release a new skill
 
 ```bash
-skpm init skill my-skill --output-dir ./skills
+skcr scaffold skill my-skill
 # edit skills/my-skill/SKILL.md
 skpm validate skills/my-skill
+skpm version bump patch skills/my-skill
+skpm package skills/my-skill
 skpm publish  skills/my-skill --source myregistry
 # → validates, packages, creates tag, pushes, uploads
+```
+
+Compatibility fallback:
+
+```bash
+skpm init skill my-skill --output-dir ./skills
 ```
 
 ---

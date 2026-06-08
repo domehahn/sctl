@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/domehahn/sctl/internal/publisher"
+	"github.com/domehahn/skpm/internal/publisher"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

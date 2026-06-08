@@ -30,12 +30,12 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/skpm
-          key: sctl-${{ hashFiles('agent-skills.lock') }}
-          restore-keys: sctl-
+          key: skpm-${{ hashFiles('agent-skills.lock') }}
+          restore-keys: skpm-
 
       - name: Install skpm
         run: |
-          curl -sSL "https://github.com/domehahn/sctl/releases/download/v${SKPM_VERSION}/skm_${SKPM_VERSION}_linux_amd64.tar.gz" \
+          curl -sSL "https://github.com/domehahn/skpm/releases/download/v${SKPM_VERSION}/skpm_${SKPM_VERSION}_linux_amd64.tar.gz" \
             | tar -xz -C /usr/local/bin skpm
 
       - name: Install skills
@@ -54,7 +54,7 @@ jobs:
 
       - name: Install skpm
         run: |
-          curl -sSL "https://github.com/domehahn/sctl/releases/download/v${SKPM_VERSION}/skm_${SKPM_VERSION}_linux_amd64.tar.gz" \
+          curl -sSL "https://github.com/domehahn/skpm/releases/download/v${SKPM_VERSION}/skpm_${SKPM_VERSION}_linux_amd64.tar.gz" \
             | tar -xz -C /usr/local/bin skpm
 
       - name: Validate changed skills
@@ -83,7 +83,7 @@ jobs:
 
       - name: Install skpm
         run: |
-          curl -sSL "https://github.com/domehahn/sctl/releases/download/v${SKPM_VERSION}/skm_${SKPM_VERSION}_linux_amd64.tar.gz" \
+          curl -sSL "https://github.com/domehahn/skpm/releases/download/v${SKPM_VERSION}/skpm_${SKPM_VERSION}_linux_amd64.tar.gz" \
             | tar -xz -C /usr/local/bin skpm
 
       - name: Derive skill name and version from tag

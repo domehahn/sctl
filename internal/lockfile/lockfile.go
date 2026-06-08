@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 
 	"gopkg.in/yaml.v3"
 )
@@ -14,17 +15,19 @@ const (
 )
 
 type LockFile struct {
-	Version int         `yaml:"version"`
-	Skills  []SkillLock `yaml:"skills"`
+	Version     int         `yaml:"version"`
+	GeneratedAt string      `yaml:"generated_at,omitempty"`
+	Skills      []SkillLock `yaml:"skills"`
 }
 
 type SkillLock struct {
-	Name        string   `yaml:"name"`
-	Version     string   `yaml:"version"`
-	Source      string   `yaml:"source"`
-	SourceURL   string   `yaml:"source_url"`
-	SHA256      string   `yaml:"sha256"`
-	InstalledTo []string `yaml:"installed_to"`
+	Name           string   `yaml:"name"`
+	Version        string   `yaml:"version"`
+	Source         string   `yaml:"source"`
+	SourceURL      string   `yaml:"source_url"`
+	SHA256         string   `yaml:"sha256"`
+	CompatibleWith []string `yaml:"compatible_with,omitempty"`
+	InstalledTo    []string `yaml:"installed_to,omitempty"`
 }
 
 func New() *LockFile {
@@ -47,6 +50,7 @@ func Read(path string) (*LockFile, error) {
 }
 
 func (lf *LockFile) Write(path string) error {
+	lf.Sort()
 	data, err := yaml.Marshal(lf)
 	if err != nil {
 		return fmt.Errorf("marshal lockfile: %w", err)
@@ -64,6 +68,12 @@ func (lf *LockFile) Write(path string) error {
 		return fmt.Errorf("atomic rename lockfile: %w", err)
 	}
 	return nil
+}
+
+func (lf *LockFile) Sort() {
+	sort.SliceStable(lf.Skills, func(i, j int) bool {
+		return lf.Skills[i].Name < lf.Skills[j].Name
+	})
 }
 
 func (lf *LockFile) Upsert(lock SkillLock) {

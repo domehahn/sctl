@@ -53,7 +53,7 @@ var (
 func NewRootCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:   "skpm",
-		Short: "Skill Control — AI agent skill package manager",
+		Short: "Skill Package Manager for AI agent skills",
 		Long: `skpm manages AI agent skills as versioned software artifacts.
 
 Skills are SKILL.md-based capability bundles for Claude Code, GitLab Duo,
@@ -73,11 +73,21 @@ GitHub Copilot, and Codex. skpm installs, validates, and packages them.`,
 
 	root.AddCommand(newInitCmd())
 	root.AddCommand(newConfigCmd())
-	root.AddCommand(newInstallCmd())
 	root.AddCommand(newAddCmd())
+	root.AddCommand(newRemoveCmd())
+	root.AddCommand(newLockCmd())
+	root.AddCommand(newInstallCmd())
+	root.AddCommand(newUpdateCmd())
+	root.AddCommand(newOutdatedCmd())
+	root.AddCommand(newListCmd())
+	root.AddCommand(newSearchCmd())
+	root.AddCommand(newInfoCmd())
 	root.AddCommand(newValidateCmd())
 	root.AddCommand(newPackageCmd())
 	root.AddCommand(newPublishCmd())
+	root.AddCommand(newVerifyCmd())
+	root.AddCommand(newDoctorCmd())
+	root.AddCommand(newCacheCmd())
 	root.AddCommand(newVersionCmd())
 
 	return root
@@ -87,7 +97,7 @@ func newVersionCmd() *cobra.Command {
 	var debugBuildInfo bool
 	c := &cobra.Command{
 		Use:   "version",
-		Short: "Print skpm version information",
+		Short: "Print skpm version information or manage skill versions",
 		Run: func(cmd *cobra.Command, args []string) {
 			if debugBuildInfo {
 				info, ok := debug.ReadBuildInfo()
@@ -120,6 +130,9 @@ func newVersionCmd() *cobra.Command {
 	}
 	c.Flags().BoolVar(&debugBuildInfo, "debug-build-info", false, "")
 	_ = c.Flags().MarkHidden("debug-build-info")
+	c.AddCommand(newVersionShowCmd())
+	c.AddCommand(newVersionBumpCmd())
+	c.AddCommand(newVersionSetCmd())
 	return c
 }
 

@@ -1,6 +1,6 @@
 name: example-skill
 version: "1.0.0"
-description: An example skill for testing sctl.
+description: An example skill for testing skpm.
 owners:
   - platform-team
 compatible_with:

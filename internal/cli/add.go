@@ -12,13 +12,13 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/domehahn/sctl/internal/cache"
-	"github.com/domehahn/sctl/internal/config"
-	"github.com/domehahn/sctl/internal/installer"
-	"github.com/domehahn/sctl/internal/lockfile"
-	"github.com/domehahn/sctl/internal/manifest"
-	"github.com/domehahn/sctl/internal/registry"
-	"github.com/domehahn/sctl/internal/skill"
+	"github.com/domehahn/skpm/internal/cache"
+	"github.com/domehahn/skpm/internal/config"
+	"github.com/domehahn/skpm/internal/installer"
+	"github.com/domehahn/skpm/internal/lockfile"
+	"github.com/domehahn/skpm/internal/manifest"
+	"github.com/domehahn/skpm/internal/registry"
+	"github.com/domehahn/skpm/internal/skill"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
@@ -29,6 +29,10 @@ func newAddCmd() *cobra.Command {
 		source       string
 		ref          string
 		skillSubPath string
+		doInstall    bool
+		noInstall    bool
+		doLock       bool
+		noLock       bool
 	)
 
 	cmd := &cobra.Command{
@@ -51,12 +55,12 @@ For skills without a release tag, use --ref to download from a branch or commit:
 
 			// Local path: skpm add ./my-skill  or  skpm add /abs/path/to/skill
 			if isLocalPath(args[0]) {
-				return addFromLocalPath(cmd, args[0], format)
+				return addFromLocalPath(cmd, args[0], format, addOptions{Install: doInstall && !noInstall, Lock: doLock && !noLock})
 			}
 
 			// Ref-based download: no release tag needed
 			if ref != "" {
-				return addFromRef(cmd, args[0], ref, skillSubPath, source, format)
+				return addFromRef(cmd, args[0], ref, skillSubPath, source, format, addOptions{Install: doInstall && !noInstall, Lock: doLock && !noLock})
 			}
 
 			name, version := parseSkillArg(args[0])
@@ -103,29 +107,36 @@ For skills without a release tag, use --ref to download from a branch or commit:
 				return &UserError{Message: fmt.Sprintf("resolve platform paths: %v", err)}
 			}
 
-			workDir, _ := os.Getwd()
-			for _, dest := range installPaths {
-				absTarget := filepath.Join(workDir, dest)
-				if err := atomicUnzipPublic(zipPath, absTarget); err != nil {
-					return &InternalError{Message: fmt.Sprintf("install to %s", dest), Cause: err}
+			shouldInstall := doInstall && !noInstall
+			shouldLock := doLock && !noLock
+			if shouldInstall {
+				workDir, _ := os.Getwd()
+				for _, dest := range installPaths {
+					absTarget := filepath.Join(workDir, dest)
+					if err := atomicUnzipPublic(zipPath, absTarget); err != nil {
+						return &InternalError{Message: fmt.Sprintf("install to %s", dest), Cause: err}
+					}
 				}
 			}
 
 			// update lockfile
-			lf, _ := lockfile.Read(lockfile.DefaultFilename)
-			if lf == nil {
-				lf = lockfile.New()
-			}
-			lf.Upsert(lockfile.SkillLock{
-				Name:        name,
-				Version:     artifact.Version,
-				Source:      src,
-				SourceURL:   artifact.DownloadURL,
-				SHA256:      actualSHA,
-				InstalledTo: installPaths,
-			})
-			if err := lf.Write(lockfile.DefaultFilename); err != nil {
-				return &InternalError{Message: "write lockfile", Cause: err}
+			if shouldLock {
+				lf, _ := lockfile.Read(lockfile.DefaultFilename)
+				if lf == nil {
+					lf = lockfile.New()
+				}
+				lf.Upsert(lockfile.SkillLock{
+					Name:           name,
+					Version:        artifact.Version,
+					Source:         src,
+					SourceURL:      artifact.DownloadURL,
+					SHA256:         actualSHA,
+					CompatibleWith: platformsToStrings(compatibleWith),
+					InstalledTo:    installPaths,
+				})
+				if err := lf.Write(lockfile.DefaultFilename); err != nil {
+					return &InternalError{Message: "write lockfile", Cause: err}
+				}
 			}
 
 			// update manifest (source of truth for re-generating the lockfile)
@@ -170,11 +181,20 @@ For skills without a release tag, use --ref to download from a branch or commit:
 	cmd.Flags().StringVar(&source, "source", "", "Registry source (named config key, github, gitlab, artifactory, local, or path)")
 	cmd.Flags().StringVar(&ref, "ref", "", "Git branch, tag, or commit SHA to download from (no release needed)")
 	cmd.Flags().StringVar(&skillSubPath, "path", "", "Path of the skill within the repository (e.g. skills/my-skill)")
+	cmd.Flags().BoolVar(&doInstall, "install", true, "Install after adding")
+	cmd.Flags().BoolVar(&noInstall, "no-install", false, "Do not install after adding")
+	cmd.Flags().BoolVar(&doLock, "lock", true, "Update agent-skills.lock after adding")
+	cmd.Flags().BoolVar(&noLock, "no-lock", false, "Do not update agent-skills.lock after adding")
 	return cmd
 }
 
+type addOptions struct {
+	Install bool
+	Lock    bool
+}
+
 // addFromRef downloads a skill from a specific git ref without requiring a release.
-func addFromRef(cmd *cobra.Command, skillName, ref, skillSubPath, source string, format OutputFormat) error {
+func addFromRef(cmd *cobra.Command, skillName, ref, skillSubPath, source string, format OutputFormat, opts addOptions) error {
 	cfg, err := config.Load()
 	if err != nil {
 		return &InternalError{Message: "load config", Cause: err}
@@ -226,7 +246,7 @@ func addFromRef(cmd *cobra.Command, skillName, ref, skillSubPath, source string,
 	}
 
 	// Install from the temp directory using the existing local path logic.
-	return addFromLocalPath(cmd, skillDir, format)
+	return addFromLocalPath(cmd, skillDir, format, opts)
 }
 
 func isLocalPath(arg string) bool {
@@ -236,7 +256,7 @@ func isLocalPath(arg string) bool {
 		arg == "." || arg == ".."
 }
 
-func addFromLocalPath(cmd *cobra.Command, path string, format OutputFormat) error {
+func addFromLocalPath(cmd *cobra.Command, path string, format OutputFormat, opts addOptions) error {
 	absPath, err := filepath.Abs(path)
 	if err != nil {
 		return &UserError{Message: fmt.Sprintf("resolve path %q: %v", path, err)}
@@ -269,28 +289,33 @@ func addFromLocalPath(cmd *cobra.Command, path string, format OutputFormat) erro
 		return &UserError{Message: fmt.Sprintf("resolve platform paths: %v", err)}
 	}
 
-	workDir, _ := os.Getwd()
-	for _, dest := range installPaths {
-		if err := copyDir(absPath, filepath.Join(workDir, dest)); err != nil {
-			return &InternalError{Message: fmt.Sprintf("install to %s", dest), Cause: err}
+	if opts.Install {
+		workDir, _ := os.Getwd()
+		for _, dest := range installPaths {
+			if err := copyDir(absPath, filepath.Join(workDir, dest)); err != nil {
+				return &InternalError{Message: fmt.Sprintf("install to %s", dest), Cause: err}
+			}
 		}
 	}
 
 	sourceURL := "file://" + absPath
 
-	lf, _ := lockfile.Read(lockfile.DefaultFilename)
-	if lf == nil {
-		lf = lockfile.New()
-	}
-	lf.Upsert(lockfile.SkillLock{
-		Name:        sy.Name,
-		Version:     sy.Version,
-		Source:      "local",
-		SourceURL:   sourceURL,
-		InstalledTo: installPaths,
-	})
-	if err := lf.Write(lockfile.DefaultFilename); err != nil {
-		return &InternalError{Message: "write lockfile", Cause: err}
+	if opts.Lock {
+		lf, _ := lockfile.Read(lockfile.DefaultFilename)
+		if lf == nil {
+			lf = lockfile.New()
+		}
+		lf.Upsert(lockfile.SkillLock{
+			Name:           sy.Name,
+			Version:        sy.Version,
+			Source:         "local",
+			SourceURL:      sourceURL,
+			CompatibleWith: platformsToStrings(sy.CompatibleWith),
+			InstalledTo:    installPaths,
+		})
+		if err := lf.Write(lockfile.DefaultFilename); err != nil {
+			return &InternalError{Message: "write lockfile", Cause: err}
+		}
 	}
 
 	mf, _ := manifest.Read(manifest.DefaultFilename)

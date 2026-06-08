@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -84,7 +85,8 @@ func buildZIP(_ context.Context, srcDir, outPath string, sy *SkillYAML) (string,
 	mw := io.MultiWriter(f, h)
 	zw := zip.NewWriter(mw)
 
-	if err := addDirToZIP(zw, srcDir, srcDir); err != nil {
+	checksums, err := addDirToZIP(zw, srcDir, srcDir)
+	if err != nil {
 		f.Close()
 		return "", err
 	}
@@ -93,7 +95,7 @@ func buildZIP(_ context.Context, srcDir, outPath string, sy *SkillYAML) (string,
 		Name:           sy.Name,
 		Version:        sy.Version,
 		SHA256:         "",
-		CreatedAt:      time.Now().UTC().Format(time.RFC3339),
+		CreatedAt:      reproducibleTime().Format(time.RFC3339),
 		CompatibleWith: sy.CompatibleWith,
 	}
 	if commit := os.Getenv("GIT_COMMIT"); commit != "" {
@@ -105,14 +107,16 @@ func buildZIP(_ context.Context, srcDir, outPath string, sy *SkillYAML) (string,
 		f.Close()
 		return "", fmt.Errorf("marshal manifest: %w", err)
 	}
-	mw2, err := zw.Create("manifest.json")
-	if err != nil {
+	if err := addBytesToZIP(zw, "manifest.json", mData); err != nil {
 		f.Close()
-		return "", fmt.Errorf("create manifest entry: %w", err)
+		return "", err
 	}
-	if _, err := mw2.Write(mData); err != nil {
+	checksums["manifest.json"] = sha256Hex(mData)
+
+	checksumData := []byte(checksumsText(checksums))
+	if err := addBytesToZIP(zw, "checksums.txt", checksumData); err != nil {
 		f.Close()
-		return "", fmt.Errorf("write manifest: %w", err)
+		return "", err
 	}
 
 	if err := zw.Close(); err != nil {
@@ -131,47 +135,69 @@ func buildZIP(_ context.Context, srcDir, outPath string, sy *SkillYAML) (string,
 	return sha, nil
 }
 
-func addDirToZIP(zw *zip.Writer, baseDir, currentDir string) error {
-	entries, err := os.ReadDir(currentDir)
-	if err != nil {
-		return fmt.Errorf("read dir %s: %w", currentDir, err)
-	}
-	for _, entry := range entries {
-		fullPath := filepath.Join(currentDir, entry.Name())
-		relPath, _ := filepath.Rel(baseDir, fullPath)
-		relPath = filepath.ToSlash(relPath)
-
-		if shouldSkip(entry.Name(), relPath) {
-			continue
-		}
-
-		if entry.IsDir() {
-			if err := addDirToZIP(zw, baseDir, fullPath); err != nil {
-				return err
-			}
-			continue
-		}
-
-		if err := addFileToZIP(zw, fullPath, relPath); err != nil {
+func addDirToZIP(zw *zip.Writer, baseDir, currentDir string) (map[string]string, error) {
+	var files []string
+	if err := filepath.WalkDir(currentDir, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
 			return err
 		}
+		relPath, _ := filepath.Rel(baseDir, path)
+		relPath = filepath.ToSlash(relPath)
+		if relPath == "." {
+			return nil
+		}
+		if shouldSkip(entry.Name(), relPath) {
+			if entry.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !entry.IsDir() {
+			files = append(files, path)
+		}
+		return nil
+	}); err != nil {
+		return nil, fmt.Errorf("walk %s: %w", currentDir, err)
 	}
-	return nil
+	sort.Strings(files)
+	checksums := map[string]string{}
+	for _, fullPath := range files {
+		relPath, _ := filepath.Rel(baseDir, fullPath)
+		relPath = filepath.ToSlash(relPath)
+		sum, err := addFileToZIP(zw, fullPath, relPath)
+		if err != nil {
+			return nil, err
+		}
+		checksums[relPath] = sum
+	}
+	return checksums, nil
 }
 
-func addFileToZIP(zw *zip.Writer, fullPath, relPath string) error {
-	src, err := os.Open(fullPath)
+func addFileToZIP(zw *zip.Writer, fullPath, relPath string) (string, error) {
+	data, err := os.ReadFile(fullPath)
 	if err != nil {
-		return fmt.Errorf("open %s: %w", fullPath, err)
+		return "", fmt.Errorf("read %s: %w", fullPath, err)
 	}
-	defer src.Close()
+	if err := addBytesToZIP(zw, relPath, data); err != nil {
+		return "", err
+	}
+	return sha256Hex(data), nil
+}
 
-	dst, err := zw.Create(relPath)
+func addBytesToZIP(zw *zip.Writer, relPath string, data []byte) error {
+	header := &zip.FileHeader{
+		Name:     relPath,
+		Method:   zip.Deflate,
+		Modified: reproducibleTime(),
+	}
+	dst, err := zw.CreateHeader(header)
 	if err != nil {
 		return fmt.Errorf("create zip entry %s: %w", relPath, err)
 	}
-	_, err = io.Copy(dst, src)
-	return err
+	if _, err := dst.Write(data); err != nil {
+		return fmt.Errorf("write zip entry %s: %w", relPath, err)
+	}
+	return nil
 }
 
 func shouldSkip(name, relPath string) bool {
@@ -194,6 +220,28 @@ func readSkillYAML(dir string) (*SkillYAML, error) {
 		return nil, fmt.Errorf("parse skill.yaml: %w", err)
 	}
 	return &sy, nil
+}
+
+func checksumsText(checksums map[string]string) string {
+	keys := make([]string, 0, len(checksums))
+	for k := range checksums {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var b strings.Builder
+	for _, k := range keys {
+		fmt.Fprintf(&b, "%s  %s\n", checksums[k], k)
+	}
+	return b.String()
+}
+
+func sha256Hex(data []byte) string {
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:])
+}
+
+func reproducibleTime() time.Time {
+	return time.Unix(0, 0).UTC()
 }
 
 type ValidationFailedError struct {

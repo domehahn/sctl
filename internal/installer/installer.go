@@ -14,9 +14,9 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/domehahn/sctl/internal/cache"
-	"github.com/domehahn/sctl/internal/lockfile"
-	"github.com/domehahn/sctl/internal/registry"
+	"github.com/domehahn/skpm/internal/cache"
+	"github.com/domehahn/skpm/internal/lockfile"
+	"github.com/domehahn/skpm/internal/registry"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -168,8 +168,8 @@ func (ins *Installer) ensureCached(ctx context.Context, sl lockfile.SkillLock) (
 }
 
 func atomicUnzip(zipPath, destDir string) error {
-	staging := destDir + "~sctl-staging-" + strconv.Itoa(rand.Int())
-	backup := destDir + "~sctl-backup-" + strconv.Itoa(rand.Int())
+	staging := destDir + "~skpm-staging-" + strconv.Itoa(rand.Int())
+	backup := destDir + "~skpm-backup-" + strconv.Itoa(rand.Int())
 
 	if err := unzip(zipPath, staging); err != nil {
 		os.RemoveAll(staging)

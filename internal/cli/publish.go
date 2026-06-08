@@ -7,9 +7,9 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/domehahn/sctl/internal/config"
-	"github.com/domehahn/sctl/internal/publisher"
-	"github.com/domehahn/sctl/internal/skill"
+	"github.com/domehahn/skpm/internal/config"
+	"github.com/domehahn/skpm/internal/publisher"
+	"github.com/domehahn/skpm/internal/skill"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
@@ -62,7 +62,7 @@ Use --dry-run to preview all steps without making changes.`,
 
 			// ── Step 1: Validate ───────────────────────────────────────
 			printStep(cmd, "1/5", "Validating", dir)
-			v := skill.NewValidator()
+			v := skill.NewValidatorWithOptions(skill.ValidationOptions{Publish: true})
 			vResult, err := v.Validate(cmd.Context(), dir)
 			if err != nil {
 				return &InternalError{Message: "validate", Cause: err}

@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/domehahn/sctl/internal/registry"
+	"github.com/domehahn/skpm/internal/registry"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -166,7 +166,7 @@ func TestExtractSkillFromZIPWithSubPath(t *testing.T) {
 	archive := buildArchiveZIP(t, map[string]string{
 		"owner-repo-abc/skills/my-skill/SKILL.md":   "# My Skill",
 		"owner-repo-abc/skills/my-skill/skill.yaml": "name: my-skill",
-		"owner-repo-abc/other-file.txt":              "other",
+		"owner-repo-abc/other-file.txt":             "other",
 	})
 
 	destDir := t.TempDir()

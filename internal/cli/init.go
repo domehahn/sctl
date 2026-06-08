@@ -9,8 +9,8 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/domehahn/sctl/internal/lockfile"
-	"github.com/domehahn/sctl/internal/manifest"
+	"github.com/domehahn/skpm/internal/lockfile"
+	"github.com/domehahn/skpm/internal/manifest"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
@@ -170,8 +170,13 @@ func newInitSkillCmd() *cobra.Command {
 	var outputDir string
 	cmd := &cobra.Command{
 		Use:   "skill <name>",
-		Short: "Scaffold a new skill directory",
-		Args:  cobra.ExactArgs(1),
+		Short: "Scaffold a new skill directory (compatibility wrapper)",
+		Long: `Scaffold a new skill directory.
+
+Compatibility note:
+For new workflows, prefer ` + "`skcr scaffold skill <name>`" + `.
+Use ` + "`skpm`" + ` for validation, versioning, packaging, publishing, and installation.`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := args[0]
 			if !isValidSkillName(name) {
@@ -192,6 +197,8 @@ func newInitSkillCmd() *cobra.Command {
 
 			p := newPrompter(cmd)
 			p.header("skpm skill init")
+			p.print("Note: `skpm init skill` is kept for compatibility.\n")
+			p.print("For new workflows, prefer `skcr scaffold skill <name>`.\n\n")
 
 			description := p.ask("Description", "A specialized skill for "+name)
 			version := p.ask("Initial version", "0.1.0")
@@ -216,10 +223,13 @@ func newInitSkillCmd() *cobra.Command {
 			}
 
 			files := map[string]string{
-				"SKILL.md":     skillMDTemplate,
-				"skill.yaml":   skillYAMLTemplate,
-				"VERSION":      version,
-				"CHANGELOG.md": skillChangelogTemplate,
+				"SKILL.md":        skillMDTemplate,
+				"skill.yaml":      skillYAMLTemplate,
+				"VERSION":         version + "\n",
+				"CHANGELOG.md":    skillChangelogTemplate,
+				"README.md":       skillReadmeTemplate,
+				"LICENSE":         skillLicenseTemplate,
+				"tests/README.md": skillTestsReadmeTemplate,
 			}
 
 			for filename, tmplStr := range files {
@@ -239,7 +249,8 @@ func newInitSkillCmd() *cobra.Command {
 			p.print("\nNext steps:\n")
 			p.print("  1. Edit %s/SKILL.md with your skill's instructions\n", name)
 			p.print("  2. skpm validate %s\n", skillDir)
-			p.print("  3. skpm package  %s\n", skillDir)
+			p.print("  3. skpm version bump patch %s\n", skillDir)
+			p.print("  4. skpm package %s\n", skillDir)
 			return nil
 		},
 	}
@@ -341,6 +352,9 @@ func configFilePath() (string, error) {
 
 func writeAtomic(path, content string) error {
 	tmp := path + ".tmp"
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
 	if err := os.WriteFile(tmp, []byte(content), 0o644); err != nil {
 		return err
 	}
@@ -447,4 +461,23 @@ var skillChangelogTemplate = `# Changelog
 
 ### Added
 - Initial release of {{.Name}}.
+`
+
+var skillReadmeTemplate = `# {{.Name}}
+
+{{.Description}}
+
+## Lifecycle
+
+Use skpm to validate, version, package, and publish this skill.
+`
+
+var skillLicenseTemplate = `Copyright (c) {{.Year}} {{if .Owner}}{{.Owner}}{{else}}{{.Name}} maintainers{{end}}
+
+All rights reserved.
+`
+
+var skillTestsReadmeTemplate = `# Tests
+
+Add skill fixtures, examples, and validation notes here.
 `

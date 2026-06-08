@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/domehahn/sctl/internal/config"
+	"github.com/domehahn/skpm/internal/config"
 )
 
 // New returns a Publisher for the given registry source and tag format.

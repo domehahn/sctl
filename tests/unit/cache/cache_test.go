@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/domehahn/sctl/internal/cache"
+	"github.com/domehahn/skpm/internal/cache"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

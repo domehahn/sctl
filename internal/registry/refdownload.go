@@ -178,4 +178,3 @@ func extractZipFile(f *zip.File, dest string) error {
 	_, err = io.Copy(out, src)
 	return err
 }
-

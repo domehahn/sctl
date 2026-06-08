@@ -8,7 +8,6 @@ import (
 	"regexp"
 	"strings"
 
-	"golang.org/x/mod/semver"
 	"gopkg.in/yaml.v3"
 )
 
@@ -35,10 +34,22 @@ type Validator interface {
 	Validate(ctx context.Context, dir string) (*ValidationResult, error)
 }
 
-type StructuredValidator struct{}
+type ValidationOptions struct {
+	Strict   bool
+	Publish  bool
+	Platform Platform
+}
+
+type StructuredValidator struct {
+	options ValidationOptions
+}
 
 func NewValidator() Validator {
 	return &StructuredValidator{}
+}
+
+func NewValidatorWithOptions(options ValidationOptions) Validator {
+	return &StructuredValidator{options: options}
 }
 
 func (v *StructuredValidator) Validate(_ context.Context, dir string) (*ValidationResult, error) {
@@ -61,15 +72,24 @@ func (v *StructuredValidator) Validate(_ context.Context, dir string) (*Validati
 				res.addError("skill.yaml", fmt.Sprintf("unknown platform %q in compatible_with", p))
 			}
 		}
+		if v.options.Platform != "" && !skillYAML.supportsPlatform(v.options.Platform) {
+			res.addError("skill.yaml", fmt.Sprintf("skill is not compatible with platform %q", v.options.Platform))
+		}
 	}
 
 	if versionOK {
 		v.validateChangelog(dir, version, res)
 	}
+	v.validateHygiene(dir, res)
+	if v.options.Strict || v.options.Publish {
+		v.promoteWarnings(res)
+	}
 
 	res.Valid = len(res.Errors) == 0
 	return res, nil
 }
+
+var stableVersionPattern = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+$`)
 
 func (v *StructuredValidator) validateVersion(dir string, res *ValidationResult) (string, bool) {
 	path := filepath.Join(dir, "VERSION")
@@ -83,9 +103,8 @@ func (v *StructuredValidator) validateVersion(dir string, res *ValidationResult)
 		res.addError("VERSION", "file is empty")
 		return "", false
 	}
-	canonical := "v" + version
-	if !semver.IsValid(canonical) {
-		res.addError("VERSION", fmt.Sprintf("%q is not a valid semver string", version))
+	if !stableVersionPattern.MatchString(version) {
+		res.addError("VERSION", fmt.Sprintf("%q is not a stable SemVer string (expected 1.2.3)", version))
 		return version, false
 	}
 	return version, true
@@ -136,10 +155,65 @@ func (v *StructuredValidator) validateChangelog(dir, version string, res *Valida
 	res.addWarning("CHANGELOG.md", fmt.Sprintf("no entry found for version %q", version))
 }
 
+func (v *StructuredValidator) validateHygiene(dir string, res *ValidationResult) {
+	forbidden := map[string]bool{".env": true, "id_rsa": true, "id_ed25519": true}
+	secretPattern := regexp.MustCompile(`(?i)(api[_-]?key|secret|token|password)\s*[:=]\s*['"]?[A-Za-z0-9_\-]{16,}`)
+	_ = filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		name := d.Name()
+		rel, _ := filepath.Rel(dir, path)
+		if d.IsDir() {
+			if name == ".git" || name == "node_modules" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if forbidden[name] {
+			res.addError(rel, "forbidden file is not allowed in a skill package")
+		}
+		info, err := d.Info()
+		if err == nil && info.Size() > 5*1024*1024 {
+			res.addWarning(rel, "large file exceeds 5 MiB")
+		}
+		data, err := os.ReadFile(path)
+		if err == nil {
+			if strings.Contains(string(data), "/Users/") || strings.Contains(string(data), "C:\\") {
+				res.addWarning(rel, "contains an absolute local path")
+			}
+			if secretPattern.Match(data) {
+				res.addError(rel, "possible secret detected")
+			}
+		}
+		return nil
+	})
+}
+
+func (v *StructuredValidator) promoteWarnings(res *ValidationResult) {
+	for _, warning := range res.Warnings {
+		res.Errors = append(res.Errors, ValidationError{
+			Field:    warning.Field,
+			Message:  warning.Message,
+			Severity: SeverityError,
+		})
+	}
+	res.Warnings = nil
+}
+
 func (res *ValidationResult) addError(field, msg string) {
 	res.Errors = append(res.Errors, ValidationError{Field: field, Message: msg, Severity: SeverityError})
 }
 
 func (res *ValidationResult) addWarning(field, msg string) {
 	res.Warnings = append(res.Warnings, ValidationError{Field: field, Message: msg, Severity: SeverityWarning})
+}
+
+func (sy *SkillYAML) supportsPlatform(platform Platform) bool {
+	for _, p := range sy.CompatibleWith {
+		if p == platform || p == PlatformAll {
+			return true
+		}
+	}
+	return false
 }

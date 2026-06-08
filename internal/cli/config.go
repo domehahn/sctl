@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/domehahn/sctl/internal/config"
+	"github.com/domehahn/skpm/internal/config"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )

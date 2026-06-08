@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/domehahn/sctl/internal/skill"
+	"github.com/domehahn/skpm/internal/skill"
 )
 
 // Platform maps a skill name to filesystem install paths.

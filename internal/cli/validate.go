@@ -4,11 +4,14 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/domehahn/sctl/internal/skill"
+	"github.com/domehahn/skpm/internal/skill"
 	"github.com/spf13/cobra"
 )
 
 func newValidateCmd() *cobra.Command {
+	var strict bool
+	var publish bool
+	var platform string
 	cmd := &cobra.Command{
 		Use:   "validate [path]",
 		Short: "Validate a skill's structure",
@@ -32,7 +35,11 @@ Exits 0 if valid, 1 if errors are found.`,
 				return &UserError{Message: fmt.Sprintf("path not found: %s", dir)}
 			}
 
-			v := skill.NewValidator()
+			v := skill.NewValidatorWithOptions(skill.ValidationOptions{
+				Strict:   strict,
+				Publish:  publish,
+				Platform: skill.Platform(platform),
+			})
 			result, err := v.Validate(cmd.Context(), dir)
 			if err != nil {
 				return &InternalError{Message: "validate", Cause: err}
@@ -57,10 +64,10 @@ Exits 0 if valid, 1 if errors are found.`,
 					errStrs[i] = fmt.Sprintf("%s: %s", e.Field, e.Message)
 				}
 				PrintResult(format, CommandResult{
-					Success:  result.Valid,
-					Command:  "validate",
-					Data:     map[string]interface{}{"path": dir, "errors": errList, "warnings": warnList},
-					Errors:   errStrs,
+					Success: result.Valid,
+					Command: "validate",
+					Data:    map[string]interface{}{"path": dir, "errors": errList, "warnings": warnList},
+					Errors:  errStrs,
 				})
 				if !result.Valid {
 					os.Exit(1)
@@ -91,5 +98,8 @@ Exits 0 if valid, 1 if errors are found.`,
 			return nil
 		},
 	}
+	cmd.Flags().BoolVar(&strict, "strict", false, "Treat warnings as errors")
+	cmd.Flags().BoolVar(&publish, "publish", false, "Apply public package validation profile")
+	cmd.Flags().StringVar(&platform, "platform", "", "Validate compatibility with a target platform")
 	return cmd
 }

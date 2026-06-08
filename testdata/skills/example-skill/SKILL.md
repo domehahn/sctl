@@ -1,11 +1,11 @@
 ---
 name: example-skill
-description: An example skill for testing sctl.
+description: An example skill for testing skpm.
 ---
 
 # Example Skill
 
-This skill demonstrates the sctl packaging and installation workflow.
+This skill demonstrates the skpm packaging and installation workflow.
 
 ## Usage
 
