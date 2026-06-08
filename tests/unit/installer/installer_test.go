@@ -39,7 +39,7 @@ func buildTestLockFile(name, version, sourceURL, sha256 string) *lockfile.LockFi
 		Name:        name,
 		Version:     version,
 		Source:      "github",
-		SourceURL:   sourceURL,
+		DownloadURL: sourceURL,
 		SHA256:      sha256,
 		InstalledTo: []string{"skills/" + name},
 	})
@@ -161,7 +161,7 @@ func TestInstallFromHTTP(t *testing.T) {
 	lf.Upsert(lockfile.SkillLock{
 		Name:        "test-skill",
 		Version:     "1.0.0",
-		SourceURL:   srv.URL + "/test-skill-1.0.0.zip",
+		DownloadURL: srv.URL + "/test-skill-1.0.0.zip",
 		InstalledTo: []string{"skills/test-skill"},
 	})
 
@@ -181,7 +181,7 @@ func TestInstallSHA256Mismatch(t *testing.T) {
 	lf := lockfile.New()
 	lf.Upsert(lockfile.SkillLock{
 		Name:        "skill",
-		SourceURL:   srv.URL + "/skill.zip",
+		DownloadURL: srv.URL + "/skill.zip",
 		SHA256:      "wrong-sha",
 		InstalledTo: []string{"skills/skill"},
 	})

@@ -19,7 +19,7 @@ func TestReadWrite(t *testing.T) {
 		Name:        "my-skill",
 		Version:     "1.0.0",
 		Source:      "github",
-		SourceURL:   "https://github.com/org/skills/releases/download/v1.0.0/my-skill-1.0.0.zip",
+		DownloadURL: "https://github.com/org/skills/releases/download/v1.0.0/my-skill-1.0.0.zip",
 		SHA256:      "abc123",
 		InstalledTo: []string{"skills/my-skill"},
 	})

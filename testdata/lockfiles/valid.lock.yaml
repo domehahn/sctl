@@ -3,7 +3,7 @@ skills:
   - name: example-skill
     version: 1.0.0
     source: local
-    source_url: ""
+    download_url: ""
     sha256: ""
     installed_to:
       - .claude/skills/example-skill

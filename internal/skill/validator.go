@@ -8,6 +8,9 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/domehahn/sklib/packageio"
+	"github.com/domehahn/sklib/spec"
+	"github.com/domehahn/sklib/validate"
 	"gopkg.in/yaml.v3"
 )
 
@@ -98,9 +101,6 @@ func (v *StructuredValidator) Validate(_ context.Context, dir string) (*Validati
 	return res, nil
 }
 
-var stableVersionPattern = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+$`)
-var prereleaseVersionPattern = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+-[0-9A-Za-z.-]+(\+[0-9A-Za-z.-]+)?$`)
-
 func (v *StructuredValidator) validateVersion(dir string, res *ValidationResult) (string, bool) {
 	data, err := os.ReadFile(filepath.Join(dir, "VERSION"))
 	if err != nil {
@@ -113,10 +113,10 @@ func (v *StructuredValidator) validateVersion(dir string, res *ValidationResult)
 		return "", false
 	}
 	version = strings.TrimPrefix(version, "v")
-	if stableVersionPattern.MatchString(version) {
+	if spec.IsStableSemVer(version) {
 		return version, true
 	}
-	if prereleaseVersionPattern.MatchString(version) {
+	if spec.IsSemVer(version) {
 		if v.options.AllowPrerelease {
 			return version, true
 		}
@@ -145,24 +145,59 @@ func (v *StructuredValidator) validateSkillYAML(dir string, res *ValidationResul
 		res.addError("skill.yaml", fmt.Sprintf("parse error: %v", err), "yaml_parse_error")
 		return nil, false
 	}
-	if strings.TrimSpace(sy.Name) == "" {
-		res.addError("skill.yaml", "name is required", "missing_name")
+
+	// Delegate required-field checks to sklib/validate.
+	libResult := validate.ValidateSkillMetadata(skillYAMLToSpec(&sy), validate.Options{Strict: true})
+	for _, f := range libResult.Findings {
+		if f.Severity == validate.SeverityError {
+			// Map sklib codes to our codes where known.
+			code := f.Code
+			if code == "" {
+				code = codeFromField(f.Field)
+			}
+			res.addError("skill.yaml", f.Message, code)
+		}
 	}
-	if strings.TrimSpace(sy.Version) == "" {
-		res.addError("skill.yaml", "version is required", "missing_version_field")
-	}
-	if strings.TrimSpace(sy.Description) == "" {
-		res.addError("skill.yaml", "description is required", "missing_description")
-	}
+
 	if len(sy.CompatibleWith) == 0 {
 		res.addError("skill.yaml", "compatible_with must include at least one platform", "missing_compatible_with")
 	}
 	return &sy, true
 }
 
+// skillYAMLToSpec converts a SkillYAML to the spec.Skill type expected by sklib.
+func skillYAMLToSpec(sy *SkillYAML) spec.Skill {
+	return spec.Skill{
+		Name:           sy.Name,
+		Version:        sy.Version,
+		Description:    sy.Description,
+		Namespace:      sy.Namespace,
+		Owners:         sy.Owners,
+		License:        sy.License,
+		Entrypoint:     sy.Entrypoint,
+		Tags:           sy.Tags,
+		CompatibleWith: sy.CompatibleWith,
+		Metadata:       sy.Metadata,
+	}
+}
+
+// codeFromField returns a default validation code from a field name.
+func codeFromField(field string) string {
+	switch field {
+	case "name":
+		return "missing_name"
+	case "version":
+		return "missing_version_field"
+	case "description":
+		return "missing_description"
+	default:
+		return "invalid_field"
+	}
+}
+
 func (v *StructuredValidator) validatePlatforms(sy *SkillYAML, res *ValidationResult) {
 	for _, p := range sy.CompatibleWith {
-		if !KnownPlatforms[NormalizePlatform(p)] {
+		if !spec.IsKnownPlatform(string(p)) {
 			res.addError("skill.yaml", fmt.Sprintf("unknown platform %q in compatible_with", p), "unknown_platform")
 		}
 	}
@@ -244,8 +279,6 @@ func (v *StructuredValidator) validateOptionalFiles(dir string, res *ValidationR
 	}
 }
 
-var namePattern = regexp.MustCompile(`^[a-z][a-z0-9-]*[a-z0-9]$|^[a-z][a-z0-9]?$`)
-
 func (v *StructuredValidator) validatePublishRequirements(dir string, sy *SkillYAML, res *ValidationResult) {
 	entrypoint := sy.Entrypoint
 	if entrypoint == "" {
@@ -254,8 +287,11 @@ func (v *StructuredValidator) validatePublishRequirements(dir string, sy *SkillY
 	if _, err := os.Stat(filepath.Join(dir, entrypoint)); os.IsNotExist(err) {
 		res.addError("skill.yaml", fmt.Sprintf("entrypoint %q does not exist", entrypoint), "missing_entrypoint")
 	}
-	if sy.Name != "" && !namePattern.MatchString(sy.Name) {
-		res.addError("skill.yaml", fmt.Sprintf("name %q must be lowercase alphanumeric with hyphens, no leading/trailing hyphens", sy.Name), "invalid_name")
+	// Delegate name validation to spec.
+	if sy.Name != "" {
+		if err := spec.ValidateSkillName(sy.Name); err != nil {
+			res.addError("skill.yaml", err.Error(), "invalid_name")
+		}
 	}
 }
 
@@ -265,22 +301,25 @@ var (
 	localPathPattern  = regexp.MustCompile(`(/Users/[^\s"']+|/home/[^\s"']+|/var/folders/[^\s"']+|C:\\[^\s"']+)`)
 )
 
-var forbiddenFileNames = map[string]bool{
-	".env":        true,
-	"id_rsa":      true,
-	"id_ed25519":  true,
+// extraGeneratedArtifactPatterns covers archive files not tracked by packageio.
+var extraGeneratedArtifactPatterns = []string{"*.zip", "*.tgz", "*.tar.gz"}
+
+func isExtraGeneratedArtifact(name string) bool {
+	for _, pat := range extraGeneratedArtifactPatterns {
+		if matched, _ := filepath.Match(pat, name); matched {
+			return true
+		}
+	}
+	return false
 }
 
-var forbiddenFilePatterns = []string{"*.pem", "*.key"}
-
-var cloudCredentialNames = map[string]bool{
-	"credentials":          true,
-	"credentials.json":     true,
-	"service_account.json": true,
-	"gcloud.json":          true,
+// forbiddenKeyFileNames are private key file names not covered by packageio extension checks.
+var forbiddenKeyFileNames = map[string]bool{
+	"id_rsa":     true,
+	"id_ed25519": true,
+	"id_ecdsa":   true,
+	"id_dsa":     true,
 }
-
-var generatedArtifactPatterns = []string{"manifest.json", "checksums.txt", "*.zip", "*.tgz"}
 
 var buildDirNames = map[string]bool{
 	"node_modules": true,
@@ -288,27 +327,6 @@ var buildDirNames = map[string]bool{
 	"dist":         true,
 	"target":       true,
 	".cache":       true,
-}
-
-func isForbiddenFile(name string) bool {
-	if forbiddenFileNames[name] {
-		return true
-	}
-	for _, pat := range forbiddenFilePatterns {
-		if matched, _ := filepath.Match(pat, name); matched {
-			return true
-		}
-	}
-	return false
-}
-
-func isGeneratedArtifact(name string) bool {
-	for _, pat := range generatedArtifactPatterns {
-		if matched, _ := filepath.Match(pat, name); matched {
-			return true
-		}
-	}
-	return false
 }
 
 func (v *StructuredValidator) validateHygiene(dir string, res *ValidationResult) {
@@ -336,15 +354,14 @@ func (v *StructuredValidator) validateHygiene(dir string, res *ValidationResult)
 			return nil
 		}
 
-		if isForbiddenFile(name) {
+		// Forbidden files: delegate path-based rules to packageio; supplement with key file names.
+		if packageio.IsForbiddenPackagePath(rel) || packageio.IsForbiddenPackagePath(name) || forbiddenKeyFileNames[name] {
 			res.addError(rel, "forbidden file is not allowed in a skill package", "forbidden_file")
 			return nil
 		}
-		if cloudCredentialNames[name] {
-			res.addError(rel, "credential file is not allowed in a skill package", "forbidden_file")
-			return nil
-		}
-		if v.strictOrPublish() && isGeneratedArtifact(name) {
+		// Generated artifacts are errors in strict/publish.
+		// packageio covers manifest.json and checksums.txt; we add archive formats.
+		if v.strictOrPublish() && (packageio.IsGeneratedPackageFile(name) || isExtraGeneratedArtifact(name)) {
 			res.addError(rel, fmt.Sprintf("generated artifact %q should not be checked in; add it to .gitignore", name), "generated_artifact")
 			return nil
 		}
@@ -359,6 +376,7 @@ func (v *StructuredValidator) validateHygiene(dir string, res *ValidationResult)
 			return nil
 		}
 
+		// Content-based checks beyond filename heuristics.
 		if privateKeyPattern.Match(data) {
 			res.addError(rel, "private key block detected", "possible_secret")
 			return nil
@@ -400,15 +418,4 @@ func (res *ValidationResult) addWarning(field, msg, code string) {
 
 func (res *ValidationResult) addInfo(field, msg, code string) {
 	res.Infos = append(res.Infos, ValidationFinding{Field: field, Message: msg, Severity: SeverityInfo, Code: code})
-}
-
-func (sy *SkillYAML) supportsPlatform(platform Platform) bool {
-	normalized := NormalizePlatform(platform)
-	for _, p := range sy.CompatibleWith {
-		np := NormalizePlatform(p)
-		if np == normalized || np == PlatformAll {
-			return true
-		}
-	}
-	return false
 }

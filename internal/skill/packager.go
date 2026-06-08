@@ -14,6 +14,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/domehahn/sklib/packageio"
+	"github.com/domehahn/sklib/spec"
 	"gopkg.in/yaml.v3"
 )
 
@@ -91,12 +93,27 @@ func buildZIP(_ context.Context, srcDir, outPath string, sy *SkillYAML) (string,
 		return "", err
 	}
 
+	// Collect sorted file list for manifest.json.
+	sortedFiles := make([]string, 0, len(checksums))
+	for p := range checksums {
+		sortedFiles = append(sortedFiles, p)
+	}
+	sort.Strings(sortedFiles)
+	sortedFiles = append(sortedFiles, "manifest.json", "checksums.txt")
+
 	manifest := SkillManifest{
+		SpecVersion:    1,
 		Name:           sy.Name,
+		Namespace:      spec.DefaultNamespace(sy.Namespace),
 		Version:        sy.Version,
-		SHA256:         "",
-		CreatedAt:      reproducibleTime().Format(time.RFC3339),
+		Description:    sy.Description,
+		Entrypoint:     spec.DefaultEntrypoint(sy.Entrypoint),
 		CompatibleWith: sy.CompatibleWith,
+		PackageType:    "zip",
+		License:        sy.License,
+		PackagedBy:     "skpm",
+		PackagedAt:     reproducibleTime().Format(time.RFC3339),
+		Files:          sortedFiles,
 	}
 	if commit := os.Getenv("GIT_COMMIT"); commit != "" {
 		manifest.SourceCommit = commit
@@ -113,7 +130,15 @@ func buildZIP(_ context.Context, srcDir, outPath string, sy *SkillYAML) (string,
 	}
 	checksums["manifest.json"] = sha256Hex(mData)
 
-	checksumData := []byte(checksumsText(checksums))
+	// Build checksums.txt using sklib/packageio canonical format: "<sha256>  <path>".
+	var csEntries []spec.ChecksumEntry
+	for _, p := range append(sortedFiles[:len(sortedFiles)-1], "manifest.json") {
+		if sum, ok := checksums[p]; ok {
+			csEntries = append(csEntries, spec.ChecksumEntry{Path: p, SHA256: sum})
+		}
+	}
+	sort.Slice(csEntries, func(i, j int) bool { return csEntries[i].Path < csEntries[j].Path })
+	checksumData := packageio.FormatChecksumsText(csEntries)
 	if err := addBytesToZIP(zw, "checksums.txt", checksumData); err != nil {
 		f.Close()
 		return "", err
@@ -222,18 +247,6 @@ func readSkillYAML(dir string) (*SkillYAML, error) {
 	return &sy, nil
 }
 
-func checksumsText(checksums map[string]string) string {
-	keys := make([]string, 0, len(checksums))
-	for k := range checksums {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	var b strings.Builder
-	for _, k := range keys {
-		fmt.Fprintf(&b, "%s  %s\n", checksums[k], k)
-	}
-	return b.String()
-}
 
 func sha256Hex(data []byte) string {
 	sum := sha256.Sum256(data)

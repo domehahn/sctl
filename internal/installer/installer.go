@@ -122,7 +122,7 @@ func (ins *Installer) ensureCached(ctx context.Context, sl lockfile.SkillLock) (
 	artifact := &registry.ResolvedArtifact{
 		Name:        sl.Name,
 		Version:     sl.Version,
-		DownloadURL: sl.SourceURL,
+		DownloadURL: sl.DownloadURL,
 		SHA256:      sl.SHA256,
 	}
 
@@ -258,7 +258,7 @@ func isWithinDir(base, target string) bool {
 
 func buildRegistryFromLock(sl lockfile.SkillLock) registry.Registry {
 	if sl.Source == "local" {
-		return registry.NewLocalRegistry(filepath.Dir(sl.SourceURL))
+		return registry.NewLocalRegistry(filepath.Dir(sl.DownloadURL))
 	}
 	return &httpRegistry{}
 }

@@ -44,7 +44,7 @@ func TestInstallAndValidate(t *testing.T) {
 		Name:      "example-skill",
 		Version:   "1.0.0",
 		Source:    "http",
-		SourceURL: srv.skillURL(urlPath),
+		DownloadURL: srv.skillURL(urlPath),
 		SHA256:    sha256sum,
 		InstalledTo: []string{
 			".claude/skills/example-skill",
@@ -87,7 +87,7 @@ func TestInstallFromCache(t *testing.T) {
 		Name:        "example-skill",
 		Version:     "1.0.0",
 		Source:      "http",
-		SourceURL:   srv.skillURL(urlPath),
+		DownloadURL: srv.skillURL(urlPath),
 		SHA256:      sha256sum,
 		InstalledTo: []string{".claude/skills/example-skill"},
 	})
@@ -116,7 +116,7 @@ func TestInstallDryRun(t *testing.T) {
 		Name:        "example-skill",
 		Version:     "1.0.0",
 		Source:      "http",
-		SourceURL:   "http://localhost:9999/nonexistent.zip",
+		DownloadURL: "http://localhost:9999/nonexistent.zip",
 		SHA256:      "deadbeef",
 		InstalledTo: []string{".claude/skills/example-skill"},
 	})

@@ -26,8 +26,9 @@ type SkillLock struct {
 	Version        string            `yaml:"version"`
 	Source         string            `yaml:"source"`
 	RegistryType   string            `yaml:"registry_type,omitempty"`
-	SourceURL      string            `yaml:"source_url"`
-	ArtifactName   string            `yaml:"artifact_name,omitempty"`
+	RegistryURL    string            `yaml:"registry_url,omitempty"`
+	Artifact       string            `yaml:"artifact,omitempty"`
+	DownloadURL    string            `yaml:"download_url"`
 	SHA256         string            `yaml:"sha256"`
 	PackageType    string            `yaml:"package_type,omitempty"`
 	CompatibleWith []string          `yaml:"compatible_with,omitempty"`

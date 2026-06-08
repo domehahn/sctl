@@ -1,23 +1,31 @@
 package skill
 
-// Platform identifies an AI coding platform.
-type Platform string
+import (
+	"github.com/domehahn/sklib/spec"
+	"github.com/domehahn/sklib/validate"
+)
 
+// Platform is aliased from sklib/spec to ensure canonical platform identifiers
+// are shared across all tools in the ecosystem.
+type Platform = spec.Platform
+
+// Platform constants — direct aliases from sklib/spec.
 const (
-	PlatformClaudeCode    Platform = "claude-code"
-	PlatformGitLabDuo     Platform = "gitlab-duo"
-	PlatformGitHubCopilot Platform = "github-copilot"
-	PlatformCodex         Platform = "codex"
-	PlatformCursor        Platform = "cursor"
-	PlatformWindsurf      Platform = "windsurf"
-	PlatformOpenHands     Platform = "openhands"
-	PlatformOpenCode      Platform = "opencode"
-	PlatformOllama        Platform = "ollama"
-	PlatformGeneric       Platform = "generic"
-	PlatformAll           Platform = "all"
+	PlatformClaudeCode    Platform = spec.PlatformClaudeCode
+	PlatformGitLabDuo     Platform = spec.PlatformGitLabDuo
+	PlatformGitHubCopilot Platform = spec.PlatformGitHubCopilot
+	PlatformCodex         Platform = spec.PlatformCodex
+	PlatformCursor        Platform = spec.PlatformCursor
+	PlatformWindsurf      Platform = spec.PlatformWindsurf
+	PlatformOpenHands     Platform = spec.PlatformOpenHands
+	PlatformOpenCode      Platform = spec.PlatformOpenCode
+	PlatformOllama        Platform = spec.PlatformOllama
+	PlatformGeneric       Platform = spec.PlatformGeneric
+	PlatformAll           Platform = spec.PlatformAll
 )
 
 // KnownPlatforms is the canonical set of valid platform identifiers.
+// Kept for backward compatibility; use spec.IsKnownPlatform for new code.
 var KnownPlatforms = map[Platform]bool{
 	PlatformClaudeCode:    true,
 	PlatformGitLabDuo:     true,
@@ -32,34 +40,24 @@ var KnownPlatforms = map[Platform]bool{
 	PlatformAll:           true,
 }
 
-// PlatformAliases maps non-canonical platform names to their canonical form.
-var PlatformAliases = map[Platform]Platform{
-	"gitlab":  PlatformGitLabDuo,
-	"duo":     PlatformGitLabDuo,
-	"github":  PlatformGitHubCopilot,
-	"copilot": PlatformGitHubCopilot,
-	"claude":  PlatformClaudeCode,
-}
-
-// NormalizePlatform returns the canonical name for p.
-// Returns p unchanged if it is already canonical or unknown.
+// NormalizePlatform normalizes a platform identifier using sklib/spec rules.
+// Returns p unchanged if it cannot be resolved (logs-safe; callers validate separately).
 func NormalizePlatform(p Platform) Platform {
-	if KnownPlatforms[p] {
+	canonical, err := spec.NormalizePlatform(string(p))
+	if err != nil {
 		return p
 	}
-	if canonical, ok := PlatformAliases[p]; ok {
-		return canonical
-	}
-	return p
+	return canonical
 }
 
-// ValidationSeverity classifies a validation finding.
-type ValidationSeverity string
+// ValidationSeverity is aliased from sklib/validate.
+type ValidationSeverity = validate.Severity
 
+// Severity constants — aliases from sklib/validate.
 const (
-	SeverityError   ValidationSeverity = "error"
-	SeverityWarning ValidationSeverity = "warning"
-	SeverityInfo    ValidationSeverity = "info"
+	SeverityError   ValidationSeverity = validate.SeverityError
+	SeverityWarning ValidationSeverity = validate.SeverityWarning
+	SeverityInfo    ValidationSeverity = validate.SeverityInfo
 )
 
 // ValidationFinding is a single validation issue with its context.
@@ -75,6 +73,8 @@ type ValidationFinding struct {
 type ValidationError = ValidationFinding
 
 // ValidationResult holds the outcome of a validation run.
+// It retains skpm-specific fields (Profile, Path, and separate slices per severity)
+// beyond what sklib/validate.Result provides.
 type ValidationResult struct {
 	Valid    bool                `json:"valid"`
 	Profile  string              `json:"profile"`
@@ -120,12 +120,26 @@ type SkillSecurity struct {
 	RunsCommands    bool `yaml:"runs_commands"`
 }
 
-// SkillManifest is embedded in the packaged ZIP as manifest.json.
+// supportsPlatform reports whether the skill declares support for the given platform.
+func (s *SkillYAML) supportsPlatform(p Platform) bool {
+	return spec.SupportsPlatform(s.CompatibleWith, p)
+}
+
+// SkillManifest is the manifest.json embedded in a packaged skill artifact.
+// Field names and structure match schemas/package-manifest.schema.json from skillspec.
 type SkillManifest struct {
+	SpecVersion    int        `json:"spec_version"`
 	Name           string     `json:"name"`
+	Namespace      string     `json:"namespace,omitempty"`
 	Version        string     `json:"version"`
-	SHA256         string     `json:"sha256"`
-	CreatedAt      string     `json:"created_at"`
+	Description    string     `json:"description,omitempty"`
+	Entrypoint     string     `json:"entrypoint,omitempty"`
+	CompatibleWith []Platform `json:"compatible_with,omitempty"`
+	PackageType    string     `json:"package_type"`
+	SHA256         string     `json:"sha256,omitempty"`
+	Files          []string   `json:"files,omitempty"`
+	PackagedBy     string     `json:"packaged_by,omitempty"`
+	PackagedAt     string     `json:"packaged_at,omitempty"`
 	SourceCommit   string     `json:"source_commit,omitempty"`
-	CompatibleWith []Platform `json:"compatible_with"`
+	License        string     `json:"license,omitempty"`
 }

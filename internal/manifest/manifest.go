@@ -6,20 +6,36 @@ import (
 	"path/filepath"
 	"sort"
 
+	"github.com/domehahn/sklib/spec"
 	"gopkg.in/yaml.v3"
 )
 
 const DefaultFilename = "agent-skills.yaml"
 
+// RegistryConfig is aliased from sklib/spec for use in agent-skills.yaml.
+type RegistryConfig = spec.RegistryConfig
+
+// ManifestFile is the Go model for agent-skills.yaml.
+// Field layout matches schemas/agent-skills.schema.json from skillspec.
 type ManifestFile struct {
-	Version int          `yaml:"version"`
-	Skills  []SkillEntry `yaml:"skills"`
+	Version         int                       `yaml:"version"`
+	DefaultRegistry string                    `yaml:"default_registry,omitempty"`
+	Registries      map[string]RegistryConfig `yaml:"registries,omitempty"`
+	Skills          []SkillEntry              `yaml:"skills"`
+	Metadata        map[string]string         `yaml:"metadata,omitempty"`
 }
 
+// SkillEntry is a single skill declared in agent-skills.yaml.
 type SkillEntry struct {
-	Name    string `yaml:"name"`
-	Version string `yaml:"version,omitempty"` // empty = latest
-	Source  string `yaml:"source,omitempty"`  // empty = default_registry
+	Name      string            `yaml:"name"`
+	Namespace string            `yaml:"namespace,omitempty"`
+	Version   string            `yaml:"version,omitempty"`  // version constraint; empty = latest
+	Source    string            `yaml:"source,omitempty"`   // registry alias; empty = default_registry
+	Target    string            `yaml:"target,omitempty"`   // install path override
+	Platforms []spec.Platform   `yaml:"platforms,omitempty"`
+	Path      string            `yaml:"path,omitempty"`     // local path (local registry)
+	Ref       string            `yaml:"ref,omitempty"`      // git ref (local registry)
+	Metadata  map[string]string `yaml:"metadata,omitempty"`
 }
 
 func New() *ManifestFile {

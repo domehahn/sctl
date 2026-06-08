@@ -376,7 +376,10 @@ func TestStrictAbsolutePathFails(t *testing.T) {
 func TestStrictGeneratedArtifactFails(t *testing.T) {
 	files := copyMap(validSkillFiles)
 	files["my-skill-1.2.3.zip"] = "fake zip content"
-	res := strictValidate(t, files)
+	dir := writeSkillFixture(t, files)
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "tests"), 0o755))
+	res, err := skill.NewValidatorWithOptions(skill.ValidationOptions{Strict: true}).Validate(context.Background(), dir)
+	require.NoError(t, err)
 	assert.False(t, res.Valid)
 	assertErrorCode(t, res, "generated_artifact")
 }
