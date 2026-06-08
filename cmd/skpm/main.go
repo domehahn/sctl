@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/domehahn/skpm/internal/cli"
+	"github.com/domehahn/skpm/v2/internal/cli"
 )
 
 func main() {

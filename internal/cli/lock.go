@@ -3,9 +3,9 @@ package cli
 import (
 	"fmt"
 
-	"github.com/domehahn/skpm/internal/config"
-	"github.com/domehahn/skpm/internal/lockfile"
-	"github.com/domehahn/skpm/internal/manifest"
+	"github.com/domehahn/skpm/v2/internal/config"
+	"github.com/domehahn/skpm/v2/internal/lockfile"
+	"github.com/domehahn/skpm/v2/internal/manifest"
 	"github.com/spf13/cobra"
 )
 

@@ -9,10 +9,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/domehahn/skpm/internal/cache"
-	"github.com/domehahn/skpm/internal/installer"
-	"github.com/domehahn/skpm/internal/lockfile"
-	"github.com/domehahn/skpm/internal/skill"
+	"github.com/domehahn/skpm/v2/internal/cache"
+	"github.com/domehahn/skpm/v2/internal/installer"
+	"github.com/domehahn/skpm/v2/internal/lockfile"
+	"github.com/domehahn/skpm/v2/internal/skill"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

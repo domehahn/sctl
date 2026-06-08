@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/domehahn/skpm/internal/config"
+	"github.com/domehahn/skpm/v2/internal/config"
 	"github.com/spf13/cobra"
 )
 

@@ -14,12 +14,12 @@ import (
 	"sort"
 	"time"
 
-	"github.com/domehahn/skpm/internal/config"
-	"github.com/domehahn/skpm/internal/installer"
-	"github.com/domehahn/skpm/internal/lockfile"
-	"github.com/domehahn/skpm/internal/manifest"
-	"github.com/domehahn/skpm/internal/registry"
-	"github.com/domehahn/skpm/internal/skill"
+	"github.com/domehahn/skpm/v2/internal/config"
+	"github.com/domehahn/skpm/v2/internal/installer"
+	"github.com/domehahn/skpm/v2/internal/lockfile"
+	"github.com/domehahn/skpm/v2/internal/manifest"
+	"github.com/domehahn/skpm/v2/internal/registry"
+	"github.com/domehahn/skpm/v2/internal/skill"
 	"golang.org/x/mod/semver"
 	"gopkg.in/yaml.v3"
 )

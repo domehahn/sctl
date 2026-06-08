@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/domehahn/skpm/internal/skill"
+	"github.com/domehahn/skpm/v2/internal/skill"
 	"github.com/spf13/cobra"
 )
 

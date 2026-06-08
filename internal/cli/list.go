@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/domehahn/skpm/internal/lockfile"
+	"github.com/domehahn/skpm/v2/internal/lockfile"
 	"github.com/spf13/cobra"
 )
 

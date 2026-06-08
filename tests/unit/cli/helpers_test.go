@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/domehahn/skpm/internal/cli"
-	"github.com/domehahn/skpm/internal/config"
+	"github.com/domehahn/skpm/v2/internal/cli"
+	"github.com/domehahn/skpm/v2/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

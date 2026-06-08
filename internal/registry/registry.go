@@ -6,7 +6,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/domehahn/skpm/internal/skill"
+	"github.com/domehahn/skpm/v2/internal/skill"
 )
 
 type SkillRef struct {

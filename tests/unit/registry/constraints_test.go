@@ -3,7 +3,7 @@ package registry_test
 import (
 	"testing"
 
-	"github.com/domehahn/skpm/internal/registry"
+	"github.com/domehahn/skpm/v2/internal/registry"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

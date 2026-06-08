@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/domehahn/skpm/internal/config"
-	"github.com/domehahn/skpm/internal/registry"
+	"github.com/domehahn/skpm/v2/internal/config"
+	"github.com/domehahn/skpm/v2/internal/registry"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )

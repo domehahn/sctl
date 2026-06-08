@@ -14,9 +14,9 @@ import (
 	"strconv"
 	"sync"
 
-	"github.com/domehahn/skpm/internal/cache"
-	"github.com/domehahn/skpm/internal/lockfile"
-	"github.com/domehahn/skpm/internal/registry"
+	"github.com/domehahn/skpm/v2/internal/cache"
+	"github.com/domehahn/skpm/v2/internal/lockfile"
+	"github.com/domehahn/skpm/v2/internal/registry"
 	"golang.org/x/sync/errgroup"
 )
 

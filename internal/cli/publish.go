@@ -7,9 +7,9 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/domehahn/skpm/internal/config"
-	"github.com/domehahn/skpm/internal/publisher"
-	"github.com/domehahn/skpm/internal/skill"
+	"github.com/domehahn/skpm/v2/internal/config"
+	"github.com/domehahn/skpm/v2/internal/publisher"
+	"github.com/domehahn/skpm/v2/internal/skill"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
