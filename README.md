@@ -16,7 +16,7 @@ Agent skills are SKILL.md files that give coding assistants domain-specific know
 - **Reproducible** — any CI run installs the exact same bytes
 - **Multi-platform** — one install writes to all compatible platform paths automatically
 - **Auditable** — every artifact is verified before it touches disk
-- **Recoverable** — deleted lockfile? `skpm install` regenerates it from `agent-skills.yaml`
+- **Recoverable** — deleted lockfile? `skpm lock` regenerates it from `agent-skills.yaml`
 
 ---
 
@@ -75,13 +75,15 @@ validation, versioning, packaging, publishing, installation, and updates.
 | `agent-skills.yaml` | `pyproject.toml` | Manifest: which skills you want (human-edited) |
 | `agent-skills.lock` | `poetry.lock` | Lockfile: exact versions + SHA256 (generated) |
 
-`skpm install` behaviour:
+Lifecycle semantics:
 
-- **Lockfile present** → installs exactly what is pinned (fast, deterministic)
-- **Lockfile missing**, manifest present → resolves versions from registry, generates lockfile, installs
-- **Both missing** → error with instructions
+- `skpm add` primarily updates `agent-skills.yaml`.
+- `skpm lock` resolves `agent-skills.yaml` into deterministic `agent-skills.lock`.
+- `skpm install` installs exactly what is pinned in `agent-skills.lock`.
+- `skpm update` refreshes locked versions without installing unless `--install` is passed.
 
-A deleted lockfile is never a problem: `skpm install` regenerates it from `agent-skills.yaml` automatically.
+For compatibility, `add` still locks and installs by default. Use `--no-lock` or
+`--no-install` when you want explicit package-manager style steps.
 
 **`agent-skills.yaml`** (what you declare):
 
@@ -114,6 +116,36 @@ skills:
 ---
 
 ## Commands
+
+Command overview:
+
+```text
+skpm init
+skpm init skill <name>        # compatibility wrapper; prefer skcr scaffold skill
+skpm config
+skpm add <skill>@<constraint>
+skpm remove <skill>
+skpm lock
+skpm install
+skpm update [skill]
+skpm outdated
+skpm list
+skpm search <query>
+skpm info <skill>
+skpm validate [path]
+skpm package [path]
+skpm publish [path]
+skpm verify
+skpm doctor
+skpm cache list
+skpm cache clean
+skpm version
+skpm version show <path>
+skpm version bump patch <path>
+skpm version bump minor <path>
+skpm version bump major <path>
+skpm version set <version> <path>
+```
 
 ### `skpm init`
 
@@ -180,10 +212,17 @@ skpm config show --output json
 
 ### `skpm install`
 
-Installs all skills. Generates `agent-skills.lock` from `agent-skills.yaml` if the lockfile is missing.
+Installs skills from `agent-skills.lock`. If the lockfile is missing and
+`agent-skills.yaml` exists, `install` can resolve and generate the lockfile for
+backwards compatibility.
 
 ```bash
-skpm install [--lock <path>] [--dry-run] [--concurrency N]
+skpm install
+skpm install --frozen-lockfile
+skpm install --check
+skpm install --prune
+skpm install --platform codex
+skpm install --target ./sandbox
 ```
 
 - Downloads artifacts in parallel (default 4 concurrent)
@@ -191,6 +230,9 @@ skpm install [--lock <path>] [--dry-run] [--concurrency N]
 - Uses a local cache (`~/.cache/skpm/`) — re-runs are instant
 - Atomic installs: staging directory → rename, never partial state
 - `--dry-run` prints what would be installed without writing files
+- `--frozen-lockfile` fails if `agent-skills.yaml` and `agent-skills.lock` differ
+- `--check` does not write files and fails if installation is incomplete
+- `--prune` removes installed skills no longer present in the lockfile
 
 **Platform paths installed per `compatible_with`:**
 
@@ -205,7 +247,8 @@ skpm install [--lock <path>] [--dry-run] [--concurrency N]
 
 ### `skpm add <skill[@version]>`
 
-Resolves, downloads, and installs a skill, then updates both `agent-skills.yaml` and `agent-skills.lock`.
+Adds a skill declaration and, by default for compatibility, resolves, locks, and
+installs it.
 
 ```bash
 skpm add gitlab-policy-reviewer@1.5.0 --source myregistry
@@ -239,11 +282,104 @@ skpm add my-skill --source myregistry --ref main --path skills/my-skill
 | `--source` | Registry to use (falls back to `default_registry`) |
 | `--ref` | Branch, tag, or commit SHA — skips release lookup |
 | `--path` | Path of the skill within the repository (for `--ref` with monorepos) |
+| `--install` / `--no-install` | Control whether files are installed after adding |
+| `--lock` / `--no-lock` | Control whether `agent-skills.lock` is updated |
 
 - Version defaults to latest if omitted
 - For local paths: reads `skill.yaml` directly, copies the directory atomically
 - For `--ref`: downloads the archive at that ref, validates, then installs
 - Creates or updates both `agent-skills.yaml` and `agent-skills.lock`
+
+---
+
+### `skpm remove <skill>`
+
+Removes a skill from `agent-skills.yaml`, refreshes `agent-skills.lock`, and can
+optionally remove installed files.
+
+```bash
+skpm remove documentation-reviewer
+skpm remove documentation-reviewer --prune
+skpm remove documentation-reviewer --dry-run
+```
+
+---
+
+### `skpm lock`
+
+Resolves `agent-skills.yaml` into `agent-skills.lock`.
+
+```bash
+skpm lock
+skpm lock --check
+skpm lock --update
+```
+
+- `--check` fails if the existing lockfile is outdated.
+- `--update` refreshes resolved versions.
+- The lockfile is sorted deterministically and includes resolved source, URL,
+  SHA256, compatible platforms, install paths, and generation time when known.
+
+---
+
+### `skpm list`
+
+Lists locked skills and their install metadata.
+
+```bash
+skpm list
+skpm list --output json
+```
+
+Shows name, version, source registry, compatible platforms, and installation
+paths when available.
+
+---
+
+### `skpm update [skill]`
+
+Updates one skill or all skills in the lockfile. It does not install by default.
+
+```bash
+skpm update
+skpm update documentation-reviewer
+skpm update documentation-reviewer --latest
+skpm update --install
+```
+
+- Respects manifest constraints by default.
+- `--latest` moves the manifest constraint to the latest version exposed by the
+  registry discovery API.
+- `--install` installs after writing the updated lockfile.
+
+---
+
+### `skpm outdated`
+
+Compares locked versions with versions exposed by registries.
+
+```bash
+skpm outdated
+skpm outdated --output json
+```
+
+Shows current version, latest compatible version, latest overall version, and the
+manifest constraint when the registry supports version discovery.
+
+---
+
+### Registry Discovery
+
+Search and inspect registry contents through the registry abstraction.
+
+```bash
+skpm search policy --source myregistry
+skpm info gitlab-policy-reviewer --source myregistry
+skpm info gitlab-policy-reviewer --versions --source myregistry
+```
+
+Discovery support depends on the registry backend. The local registry supports
+search, info, and version listing.
 
 ---
 
@@ -253,18 +389,23 @@ Validates a skill directory structure. Default path is the current directory.
 
 ```bash
 skpm validate ./skills/gitlab-policy-reviewer
+skpm validate ./skills/gitlab-policy-reviewer --strict
+skpm validate ./skills/gitlab-policy-reviewer --publish
+skpm validate ./skills/gitlab-policy-reviewer --platform codex
 skpm validate --output json
 ```
 
 Checks:
 
 - `SKILL.md` exists and is non-empty
-- `VERSION` contains a valid semver string
+- `VERSION` contains a stable SemVer string such as `1.2.3`
 - `skill.yaml` has required fields (`name`, `version`, `compatible_with`); `version` matches `VERSION`
 - `compatible_with` values are recognized platform names
 - `CHANGELOG.md` contains an entry for the current version (warning if missing)
+- forbidden files, large files, obvious secret leakage, and unsafe absolute paths
 
-Exits `0` if valid, `1` if errors are found. Warnings do not fail the check.
+Exits `0` if valid, `1` if errors are found. Warnings do not fail the default
+check. `--strict` and `--publish` promote warnings to errors.
 
 ---
 
@@ -278,9 +419,10 @@ skpm package ./skills/gitlab-policy-reviewer --output-dir ./dist
 ```
 
 - Runs `validate` first — fails if the skill is invalid
-- Creates `<name>-<version>.zip` with all skill files plus `manifest.json`
+- Creates `<name>-<version>.zip` with all skill files plus `manifest.json` and `checksums.txt`
 - Prints the SHA256 of the ZIP
 - Excludes `.git/`, `*.tmp`, `*.part`
+- Uses deterministic file ordering and normalized timestamps for reproducible archives
 
 > For a full release (tag + upload), use `skpm publish` instead.
 
@@ -350,9 +492,51 @@ skpm version bump major ./skills/my-skill
 skpm version set 1.2.3 ./skills/my-skill
 ```
 
-Skill version commands read `VERSION` and `skill.yaml`, require them to match,
-store stable SemVer without a leading `v`, and ensure `CHANGELOG.md` contains
-an entry for the resulting version.
+`skpm version` without a subcommand prints the `skpm` binary version.
+
+Skill version subcommands read `VERSION` and `skill.yaml`, require them to
+match, store stable SemVer without a leading `v`, and ensure `CHANGELOG.md`
+contains an entry for the resulting version. `version set` accepts `v1.2.3` but
+stores `1.2.3`.
+
+---
+
+### `skpm verify`
+
+Verifies lockfile and installed skill state.
+
+```bash
+skpm verify
+skpm verify --frozen-lockfile
+skpm verify --platform codex
+skpm verify --output json
+```
+
+Checks lockfile consistency, required installed files, metadata matching,
+platform compatibility, and available checksum metadata.
+
+---
+
+### `skpm doctor`
+
+Checks project and configuration health.
+
+```bash
+skpm doctor
+skpm doctor --output json
+```
+
+---
+
+### `skpm cache`
+
+Manages cached skill artifacts.
+
+```bash
+skpm cache list
+skpm cache clean
+skpm cache clean --dry-run
+```
 
 ---
 
@@ -399,7 +583,8 @@ skpm install
 
 ```bash
 rm agent-skills.lock
-skpm install   # regenerates from agent-skills.yaml, then installs
+skpm lock
+skpm install
 ```
 
 ### Author and release a new skill
