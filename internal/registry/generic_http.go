@@ -135,7 +135,7 @@ func (r *GenericHTTPRegistry) Download(ctx context.Context, artifact *ResolvedAr
 		if endpoint == "" {
 			return Unsupported(r.name, "download", "configure endpoints.download or use another registry")
 		}
-		downloadURL = r.endpointURL(endpoint, r.values(SkillRef{Namespace: artifact.Namespace, Name: artifact.Name}, artifact.Version, artifact.ArtifactName))
+		downloadURL = r.endpointURL(endpoint, r.values(SkillRef{Namespace: artifact.Namespace, Name: artifact.Name}, artifact.Version, artifact.Artifact))
 	}
 	req, err := r.newRequest(ctx, http.MethodGet, downloadURL, nil)
 	if err != nil {

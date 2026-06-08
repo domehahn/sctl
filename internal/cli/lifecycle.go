@@ -49,7 +49,7 @@ func lockFromManifest(ctx context.Context, mf *manifest.ManifestFile, cfg *confi
 		platforms := artifact.CompatibleWith
 		installPaths := []string(nil)
 		if len(platforms) > 0 {
-			paths, err := installer.ResolvePaths(entry.Name, stringsToPlatforms(platforms))
+			paths, err := installer.ResolvePaths(entry.Name, platforms)
 			if err != nil {
 				return nil, &UserError{Message: fmt.Sprintf("resolve paths for %s: %v", entry.Name, err)}
 			}
@@ -63,10 +63,10 @@ func lockFromManifest(ctx context.Context, mf *manifest.ManifestFile, cfg *confi
 			Source:         src,
 			RegistryType:   artifact.RegistryType,
 			DownloadURL:    artifact.DownloadURL,
-			Artifact:       artifact.ArtifactName,
+			Artifact:       artifact.Artifact,
 			SHA256:         artifact.SHA256,
 			PackageType:    artifact.PackageType,
-			CompatibleWith: stringsToPlatforms(platforms),
+			CompatibleWith: platforms,
 			InstalledTo:    installPaths,
 			Metadata:       artifact.Metadata,
 		})
@@ -154,13 +154,6 @@ func platformsToStrings(platforms []skill.Platform) []string {
 	return out
 }
 
-func stringsToPlatforms(platforms []string) []skill.Platform {
-	out := make([]skill.Platform, 0, len(platforms))
-	for _, p := range platforms {
-		out = append(out, skill.Platform(p))
-	}
-	return out
-}
 
 func readZipFile(path, name string) ([]byte, error) {
 	r, err := zip.OpenReader(path)

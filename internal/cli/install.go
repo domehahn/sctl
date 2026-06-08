@@ -280,10 +280,10 @@ func resolveManifest(cmd *cobra.Command, mf *manifest.ManifestFile, cfg *config.
 			Source:         src,
 			RegistryType:   artifact.RegistryType,
 			DownloadURL:    artifact.DownloadURL,
-			Artifact:       artifact.ArtifactName,
+			Artifact:       artifact.Artifact,
 			SHA256:         artifact.SHA256,
 			PackageType:    artifact.PackageType,
-			CompatibleWith: stringsToPlatforms(artifact.CompatibleWith),
+			CompatibleWith: artifact.CompatibleWith,
 			Metadata:       artifact.Metadata,
 		})
 	}

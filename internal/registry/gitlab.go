@@ -90,7 +90,7 @@ func (r *GitLabRegistry) Resolve(ctx context.Context, req ResolveRequest) (*Reso
 				Registry:     r.name,
 				RegistryType: r.Type(),
 				DownloadURL:  link.URL,
-				ArtifactName: link.Name,
+				Artifact: link.Name,
 				PackageType:  "zip",
 			}, nil
 		}

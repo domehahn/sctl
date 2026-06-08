@@ -71,7 +71,7 @@ func (r *LocalRegistry) Resolve(ctx context.Context, req ResolveRequest) (*Resol
 		Registry:     r.name,
 		RegistryType: r.Type(),
 		DownloadURL:  "file://" + path,
-		ArtifactName: assetName,
+		Artifact: assetName,
 		PackageType:  "zip",
 	}, nil
 }

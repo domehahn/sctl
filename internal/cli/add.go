@@ -135,7 +135,7 @@ For skills without a release tag, use --ref to download from a branch or commit:
 					Source:         src,
 					RegistryType:   artifact.RegistryType,
 					DownloadURL:    artifact.DownloadURL,
-					Artifact:       artifact.ArtifactName,
+					Artifact:       artifact.Artifact,
 					SHA256:         actualSHA,
 					PackageType:    artifact.PackageType,
 					CompatibleWith: compatibleWith,

@@ -35,27 +35,25 @@ type SearchRequest struct {
 	Limit     int    `json:"limit,omitempty"`
 }
 
+// ResolvedArtifact is the result of resolving a skill reference via a registry adapter.
+// It carries skpm-internal fields (Registry, RegistryType, Metadata) beyond the wire format.
 type ResolvedArtifact struct {
-	Namespace      string            `json:"namespace,omitempty"`
-	Name           string            `json:"name"`
-	Version        string            `json:"version"`
-	Registry       string            `json:"registry,omitempty"`
-	RegistryType   string            `json:"registry_type,omitempty"`
-	DownloadURL    string            `json:"download_url"`
-	ArtifactName   string            `json:"artifact_name,omitempty"`
-	SHA256         string            `json:"sha256,omitempty"`
-	PackageType    string            `json:"package_type,omitempty"`
-	CompatibleWith []string          `json:"compatible_with,omitempty"`
-	Metadata       map[string]string `json:"metadata,omitempty"`
+	Namespace      string             `json:"namespace,omitempty"`
+	Name           string             `json:"name"`
+	Version        string             `json:"version"`
+	Registry       string             `json:"registry,omitempty"`
+	RegistryType   string             `json:"registry_type,omitempty"`
+	DownloadURL    string             `json:"download_url"`
+	Artifact       string             `json:"artifact,omitempty"`
+	SHA256         string             `json:"sha256,omitempty"`
+	PackageType    string             `json:"package_type,omitempty"`
+	CompatibleWith []skill.Platform   `json:"compatible_with,omitempty"`
+	Metadata       map[string]string  `json:"metadata,omitempty"`
 }
 
-type VersionInfo struct {
-	Version        string   `json:"version"`
-	Deprecated     bool     `json:"deprecated,omitempty"`
-	Yanked         bool     `json:"yanked,omitempty"`
-	Prerelease     bool     `json:"prerelease,omitempty"`
-	CompatibleWith []string `json:"compatible_with,omitempty"`
-}
+// VersionInfo is aliased from sklib/registryapi so version list responses share
+// the canonical schema with the Skill Registry OpenAPI contract.
+type VersionInfo = registryapi.SkillVersion
 
 type SkillSearchResult struct {
 	Namespace     string `json:"namespace,omitempty"`
@@ -67,13 +65,12 @@ type SkillSearchResult struct {
 }
 
 type SkillInfo struct {
-	Namespace      string        `json:"namespace,omitempty"`
-	Name           string        `json:"name"`
-	Description    string        `json:"description,omitempty"`
-	LatestVersion  string        `json:"latest_version,omitempty"`
-	Versions       []VersionInfo `json:"versions,omitempty"`
-	Source         string        `json:"source,omitempty"`
-	CompatibleWith []string      `json:"compatible_with,omitempty"`
+	Namespace     string        `json:"namespace,omitempty"`
+	Name          string        `json:"name"`
+	Description   string        `json:"description,omitempty"`
+	LatestVersion string        `json:"latest_version,omitempty"`
+	Versions      []VersionInfo `json:"versions,omitempty"`
+	Source        string        `json:"source,omitempty"`
 }
 
 type PublishRequest struct {

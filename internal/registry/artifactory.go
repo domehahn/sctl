@@ -81,7 +81,7 @@ func (r *ArtifactoryRegistry) Resolve(ctx context.Context, req ResolveRequest) (
 		Registry:     r.name,
 		RegistryType: r.Type(),
 		DownloadURL:  downloadURL,
-		ArtifactName: assetName,
+		Artifact: assetName,
 		PackageType:  "zip",
 	}, nil
 }

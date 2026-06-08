@@ -84,7 +84,7 @@ func (r *GitHubRegistry) Resolve(ctx context.Context, req ResolveRequest) (*Reso
 				Registry:     r.name,
 				RegistryType: r.Type(),
 				DownloadURL:  asset.GetBrowserDownloadURL(),
-				ArtifactName: asset.GetName(),
+				Artifact: asset.GetName(),
 				PackageType:  "zip",
 			}, nil
 		}
