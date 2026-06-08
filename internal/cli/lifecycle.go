@@ -40,7 +40,8 @@ func lockFromManifest(ctx context.Context, mf *manifest.ManifestFile, cfg *confi
 		if err != nil {
 			return nil, &UserError{Message: fmt.Sprintf("registry for %q: %v", entry.Name, err)}
 		}
-		artifact, err := reg.Resolve(ctx, entry.Name, entry.Version)
+		ref := registry.ParseSkillRef(entry.Name, "")
+		artifact, err := reg.Resolve(ctx, registry.ResolveRequest{Ref: ref, Constraint: entry.Version})
 		if err != nil {
 			return nil, &UserError{Message: fmt.Sprintf("resolve %s: %v", entry.Name, err)}
 		}
@@ -57,12 +58,17 @@ func lockFromManifest(ctx context.Context, mf *manifest.ManifestFile, cfg *confi
 
 		lf.Upsert(lockfile.SkillLock{
 			Name:           entry.Name,
+			Namespace:      artifact.Namespace,
 			Version:        artifact.Version,
 			Source:         src,
+			RegistryType:   artifact.RegistryType,
 			SourceURL:      artifact.DownloadURL,
+			ArtifactName:   artifact.ArtifactName,
 			SHA256:         artifact.SHA256,
+			PackageType:    artifact.PackageType,
 			CompatibleWith: platforms,
 			InstalledTo:    installPaths,
+			Metadata:       artifact.Metadata,
 		})
 	}
 	lf.Sort()
@@ -134,16 +140,20 @@ func sha256File(path string) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-func registryDiscovery(ctx context.Context, source string, cfg *config.Config) (registry.DiscoveryRegistry, error) {
+func registryDiscovery(ctx context.Context, source string, cfg *config.Config) (registry.Registry, registry.DiscoveryRegistry, error) {
 	reg, err := registry.New(source, cfg)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	discovery, ok := reg.(registry.DiscoveryRegistry)
 	if !ok {
-		return nil, fmt.Errorf("registry %q does not support discovery", source)
+		return nil, nil, fmt.Errorf("registry %q does not support discovery", source)
 	}
-	return discovery, nil
+	return reg, discovery, nil
+}
+
+func registryDefaultNamespace(_ registry.Registry) string {
+	return "default"
 }
 
 func latestVersion(versions []registry.VersionInfo) string {

@@ -85,7 +85,10 @@ For skills without a release tag, use --ref to download from a branch or commit:
 
 			log.Debug().Str("skill", name).Str("version", version).Str("source", src).Msg("resolving")
 
-			artifact, err := reg.Resolve(cmd.Context(), name, version)
+			artifact, err := reg.Resolve(cmd.Context(), registry.ResolveRequest{
+				Ref:        registry.ParseSkillRef(name, ""),
+				Constraint: version,
+			})
 			if err != nil {
 				return &UserError{Message: fmt.Sprintf("resolve %s@%s: %v", name, version, err)}
 			}
@@ -127,12 +130,17 @@ For skills without a release tag, use --ref to download from a branch or commit:
 				}
 				lf.Upsert(lockfile.SkillLock{
 					Name:           name,
+					Namespace:      artifact.Namespace,
 					Version:        artifact.Version,
 					Source:         src,
+					RegistryType:   artifact.RegistryType,
 					SourceURL:      artifact.DownloadURL,
+					ArtifactName:   artifact.ArtifactName,
 					SHA256:         actualSHA,
+					PackageType:    artifact.PackageType,
 					CompatibleWith: platformsToStrings(compatibleWith),
 					InstalledTo:    installPaths,
+					Metadata:       artifact.Metadata,
 				})
 				if err := lf.Write(lockfile.DefaultFilename); err != nil {
 					return &InternalError{Message: "write lockfile", Cause: err}
@@ -307,9 +315,12 @@ func addFromLocalPath(cmd *cobra.Command, path string, format OutputFormat, opts
 		}
 		lf.Upsert(lockfile.SkillLock{
 			Name:           sy.Name,
+			Namespace:      "default",
 			Version:        sy.Version,
 			Source:         "local",
+			RegistryType:   "local",
 			SourceURL:      sourceURL,
+			PackageType:    "directory",
 			CompatibleWith: platformsToStrings(sy.CompatibleWith),
 			InstalledTo:    installPaths,
 		})

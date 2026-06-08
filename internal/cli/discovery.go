@@ -6,6 +6,7 @@ import (
 	"github.com/domehahn/skpm/internal/config"
 	"github.com/domehahn/skpm/internal/lockfile"
 	"github.com/domehahn/skpm/internal/manifest"
+	"github.com/domehahn/skpm/internal/registry"
 	"github.com/spf13/cobra"
 )
 
@@ -21,11 +22,11 @@ func newSearchCmd() *cobra.Command {
 				return &InternalError{Message: "load config", Cause: err}
 			}
 			src := sourceOrDefault(source, cfg)
-			discovery, err := registryDiscovery(cmd.Context(), src, cfg)
+			_, discovery, err := registryDiscovery(cmd.Context(), src, cfg)
 			if err != nil {
 				return &UserError{Message: err.Error()}
 			}
-			results, err := discovery.Search(cmd.Context(), args[0])
+			results, err := discovery.Search(cmd.Context(), registry.SearchRequest{Query: args[0]})
 			if err != nil {
 				return &UserError{Message: err.Error()}
 			}
@@ -56,11 +57,11 @@ func newInfoCmd() *cobra.Command {
 				return &InternalError{Message: "load config", Cause: err}
 			}
 			src := sourceOrDefault(source, cfg)
-			discovery, err := registryDiscovery(cmd.Context(), src, cfg)
+			reg, discovery, err := registryDiscovery(cmd.Context(), src, cfg)
 			if err != nil {
 				return &UserError{Message: err.Error()}
 			}
-			info, err := discovery.Info(cmd.Context(), args[0])
+			info, err := discovery.Info(cmd.Context(), registry.ParseSkillRef(args[0], registryDefaultNamespace(reg)))
 			if err != nil {
 				return &UserError{Message: err.Error()}
 			}
@@ -109,11 +110,11 @@ func newOutdatedCmd() *cobra.Command {
 			}
 			var rows []row
 			for _, sl := range lf.Skills {
-				discovery, err := registryDiscovery(cmd.Context(), sl.Source, cfg)
+				reg, discovery, err := registryDiscovery(cmd.Context(), sl.Source, cfg)
 				if err != nil {
 					continue
 				}
-				versions, err := discovery.ListVersions(cmd.Context(), sl.Name)
+				versions, err := discovery.ListVersions(cmd.Context(), registry.ParseSkillRef(sl.Name, registryDefaultNamespace(reg)))
 				if err != nil {
 					continue
 				}

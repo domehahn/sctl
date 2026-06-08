@@ -145,6 +145,11 @@ skpm version bump patch <path>
 skpm version bump minor <path>
 skpm version bump major <path>
 skpm version set <version> <path>
+skpm registry list
+skpm registry show <name>
+skpm registry add <name> --type <type>
+skpm registry test <name>
+skpm registry capabilities <name>
 ```
 
 ### `skpm init`
@@ -540,6 +545,28 @@ skpm cache clean --dry-run
 
 ---
 
+### `skpm registry`
+
+Manages registry configuration and capability detection.
+
+```bash
+skpm registry list
+skpm registry show company-skillforge
+skpm registry add company-skillforge --type skillforge --url https://skills.company.com --token-env SKILLFORGE_TOKEN
+skpm registry add generic --type generic-http --url https://skills.example.com --endpoint-resolve '/api/v1/skills/{namespace}/{name}/resolve?constraint={constraint}'
+skpm registry remove old-registry
+skpm registry test company-skillforge
+skpm registry capabilities company-skillforge --output json
+skpm registry login company-skillforge
+```
+
+`skpm` is registry-agnostic: SkillForge is one supported backend, not the core of
+the package manager. Registries advertise capabilities, and commands degrade
+gracefully when a backend does not support search, publish, governance, or other
+optional operations.
+
+---
+
 ## Global Flags
 
 | Flag | Default | Description |
@@ -645,35 +672,73 @@ Use `all` in `compatible_with` to install to every supported platform path.
 Create it interactively with `skpm init`, or write it manually:
 
 ```yaml
-default_registry: myregistry
+default_registry: company-skillforge
 cache_dir: ~/.cache/skpm
 
 registries:
-  myregistry:
-    type: artifactory
-    url: https://artifactory.company.com/artifactory#agent-skills
-    token: ""           # set via SKPM_REGISTRY_TOKEN
+  company-skillforge:
+    type: skillforge
+    url: https://skills.company.com
+    auth:
+      type: bearer
+      token_env: SKILLFORGE_TOKEN
 
-  company-github:
-    type: github
-    url: myorg/agent-skills
-    token: ""
+  company-artifactory:
+    type: artifactory
+    url: https://artifactory.company.com/artifactory
+    repo: agent-skills
+    auth:
+      type: bearer
+      token_env: ARTIFACTORY_TOKEN
 
   company-gitlab:
     type: gitlab
     url: https://gitlab.company.com
     project: platform/agent-skills   # required for gitlab
-    token: ""
+    auth:
+      type: bearer
+      token_env: GITLAB_TOKEN
+
+  company-github:
+    type: github
+    repo: myorg/agent-skills
+    auth:
+      type: bearer
+      token_env: GITHUB_TOKEN
+
+  local-dev:
+    type: local
+    path: ./dist/registry
+
+  generic:
+    type: generic-http
+    url: https://skills.example.com
+    auth:
+      type: bearer
+      token_env: SKILLS_TOKEN
+    endpoints:
+      capabilities: /api/v1/capabilities
+      search: /api/v1/skills?q={query}
+      info: /api/v1/skills/{namespace}/{name}
+      versions: /api/v1/skills/{namespace}/{name}/versions
+      resolve: /api/v1/skills/{namespace}/{name}/resolve?constraint={constraint}
+      download: /api/v1/skills/{namespace}/{name}/versions/{version}/download
+      publish: /api/v1/skills/{namespace}/{name}/versions/{version}
 ```
 
 **Supported registry types:**
 
-| Type | `url` format | `project` |
-| --- | --- | --- |
-| `github` | `owner/repo` | — |
-| `gitlab` | GitLab base URL | `namespace/project` (required) |
-| `artifactory` | `<base-url>#<repo-name>` | — |
-| `local` | filesystem base path | — |
+| Type | Key fields |
+| --- | --- |
+| `skillforge` | `url`, optional `auth`, SkillForge-compatible endpoints |
+| `generic-http` | `url`, `endpoints`, optional `auth` and `headers` |
+| `github` | `repo: owner/repo` |
+| `gitlab` | `url`, `project: namespace/project` |
+| `artifactory` | `url`, `repo` |
+| `local` | `path` |
+
+Legacy fields (`url`, `token`, `project`) are still accepted. New configs should
+prefer `auth.token_env` over storing secrets in config files.
 
 **Environment variables** override config file values:
 

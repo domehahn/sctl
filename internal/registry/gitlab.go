@@ -12,6 +12,7 @@ import (
 
 type GitLabRegistry struct {
 	client    *gitlab.Client
+	name      string
 	projectID string
 	baseURL   string
 	token     string
@@ -31,14 +32,29 @@ func NewGitLabRegistry(baseURL, projectID, token string) (*GitLabRegistry, error
 	if baseURL == "" {
 		baseURL = "https://gitlab.com"
 	}
-	return &GitLabRegistry{client: client, projectID: projectID, baseURL: strings.TrimRight(baseURL, "/"), token: token}, nil
+	return &GitLabRegistry{client: client, name: "gitlab", projectID: projectID, baseURL: strings.TrimRight(baseURL, "/"), token: token}, nil
 }
 
-func (r *GitLabRegistry) Resolve(ctx context.Context, name, version string) (*ResolvedArtifact, error) {
+func (r *GitLabRegistry) Type() string { return "gitlab" }
+
+func (r *GitLabRegistry) Name() string { return r.name }
+
+func (r *GitLabRegistry) WithName(name string) *GitLabRegistry {
+	r.name = name
+	return r
+}
+
+func (r *GitLabRegistry) Capabilities(context.Context) (*RegistryCapabilities, error) {
+	return &RegistryCapabilities{Resolve: true, Download: true, Checksums: false}, nil
+}
+
+func (r *GitLabRegistry) Resolve(ctx context.Context, req ResolveRequest) (*ResolvedArtifact, error) {
+	name := req.Ref.Name
+	version := req.Constraint
 	var releases []*gitlab.Release
 	var err error
 
-	if version == "" {
+	if version == "" || version == "latest" {
 		releases, _, err = r.client.Releases.ListReleases(r.projectID, &gitlab.ListReleasesOptions{
 			ListOptions: gitlab.ListOptions{PerPage: 1},
 		}, gitlab.WithContext(ctx))
@@ -68,9 +84,14 @@ func (r *GitLabRegistry) Resolve(ctx context.Context, name, version string) (*Re
 	for _, link := range rel.Assets.Links {
 		if link.Name == assetName {
 			return &ResolvedArtifact{
-				Name:        name,
-				Version:     ver,
-				DownloadURL: link.URL,
+				Namespace:    req.Ref.Namespace,
+				Name:         name,
+				Version:      ver,
+				Registry:     r.name,
+				RegistryType: r.Type(),
+				DownloadURL:  link.URL,
+				ArtifactName: link.Name,
+				PackageType:  "zip",
 			}, nil
 		}
 	}

@@ -13,6 +13,7 @@ import (
 )
 
 type ArtifactoryRegistry struct {
+	name       string
 	baseURL    string
 	repo       string
 	token      string
@@ -24,6 +25,7 @@ type ArtifactoryRegistry struct {
 // repo is the repository name like "agent-skills".
 func NewArtifactoryRegistry(baseURL, repo, token string) *ArtifactoryRegistry {
 	return &ArtifactoryRegistry{
+		name:       "artifactory",
 		baseURL:    strings.TrimRight(baseURL, "/"),
 		repo:       repo,
 		token:      token,
@@ -38,10 +40,32 @@ type artifactoryFolderInfo struct {
 	} `json:"children"`
 }
 
-func (r *ArtifactoryRegistry) Resolve(ctx context.Context, name, version string) (*ResolvedArtifact, error) {
-	if version == "" {
-		var err error
-		version, err = r.resolveLatestVersion(ctx, name)
+func (r *ArtifactoryRegistry) Type() string { return "artifactory" }
+
+func (r *ArtifactoryRegistry) Name() string { return r.name }
+
+func (r *ArtifactoryRegistry) WithName(name string) *ArtifactoryRegistry {
+	r.name = name
+	return r
+}
+
+func (r *ArtifactoryRegistry) Capabilities(context.Context) (*RegistryCapabilities, error) {
+	return &RegistryCapabilities{Resolve: true, Download: true, Info: false, SemVerConstraints: true, Checksums: false}, nil
+}
+
+func (r *ArtifactoryRegistry) Resolve(ctx context.Context, req ResolveRequest) (*ResolvedArtifact, error) {
+	name := req.Ref.Name
+	version := req.Constraint
+	if version == "" || version == "latest" || strings.HasPrefix(version, "^") || strings.HasPrefix(version, "~") || strings.Contains(version, " ") {
+		versions, err := r.ListVersions(ctx, req.Ref)
+		if err != nil {
+			return nil, err
+		}
+		version, err = SelectVersion(versions, req.Constraint, ConstraintOptions{
+			IncludePrerelease: req.IncludePrerelease,
+			AllowDeprecated:   req.AllowDeprecated,
+			AllowYanked:       req.AllowYanked,
+		})
 		if err != nil {
 			return nil, err
 		}
@@ -51,31 +75,36 @@ func (r *ArtifactoryRegistry) Resolve(ctx context.Context, name, version string)
 	downloadURL := fmt.Sprintf("%s/%s/%s/%s/%s", r.baseURL, r.repo, name, version, assetName)
 
 	return &ResolvedArtifact{
-		Name:        name,
-		Version:     version,
-		DownloadURL: downloadURL,
+		Namespace:    req.Ref.Namespace,
+		Name:         name,
+		Version:      version,
+		Registry:     r.name,
+		RegistryType: r.Type(),
+		DownloadURL:  downloadURL,
+		ArtifactName: assetName,
+		PackageType:  "zip",
 	}, nil
 }
 
-func (r *ArtifactoryRegistry) resolveLatestVersion(ctx context.Context, name string) (string, error) {
-	url := fmt.Sprintf("%s/api/storage/%s/%s", r.baseURL, r.repo, name)
+func (r *ArtifactoryRegistry) ListVersions(ctx context.Context, ref SkillRef) ([]VersionInfo, error) {
+	url := fmt.Sprintf("%s/api/storage/%s/%s", r.baseURL, r.repo, ref.Name)
 	req, err := r.newRequest(ctx, http.MethodGet, url)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	resp, err := r.httpClient.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("artifactory: list versions for %s: %w", name, err)
+		return nil, fmt.Errorf("artifactory: list versions for %s: %w", ref.Name, err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("artifactory: list versions HTTP %d", resp.StatusCode)
+		return nil, fmt.Errorf("artifactory: list versions HTTP %d", resp.StatusCode)
 	}
 
 	var info artifactoryFolderInfo
 	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
-		return "", fmt.Errorf("artifactory: parse folder info: %w", err)
+		return nil, fmt.Errorf("artifactory: parse folder info: %w", err)
 	}
 
 	versions := make([]string, 0, len(info.Children))
@@ -88,13 +117,17 @@ func (r *ArtifactoryRegistry) resolveLatestVersion(ctx context.Context, name str
 		}
 	}
 	if len(versions) == 0 {
-		return "", fmt.Errorf("artifactory: no versions found for %s", name)
+		return nil, fmt.Errorf("artifactory: no versions found for %s", ref.Name)
 	}
 
 	sort.Slice(versions, func(i, j int) bool {
 		return semver.Compare("v"+versions[i], "v"+versions[j]) > 0
 	})
-	return versions[0], nil
+	out := make([]VersionInfo, 0, len(versions))
+	for _, v := range versions {
+		out = append(out, VersionInfo{Version: v})
+	}
+	return out, nil
 }
 
 func (r *ArtifactoryRegistry) Download(ctx context.Context, artifact *ResolvedArtifact, dest io.Writer) error {

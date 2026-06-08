@@ -2,38 +2,96 @@ package registry
 
 import (
 	"context"
+	"fmt"
 	"io"
+	"strings"
+
+	"github.com/domehahn/skpm/internal/skill"
 )
 
+type SkillRef struct {
+	Namespace string `json:"namespace,omitempty" yaml:"namespace,omitempty"`
+	Name      string `json:"name" yaml:"name"`
+}
+
+type SkillVersionRef struct {
+	Namespace string `json:"namespace,omitempty" yaml:"namespace,omitempty"`
+	Name      string `json:"name" yaml:"name"`
+	Version   string `json:"version" yaml:"version"`
+}
+
+type ResolveRequest struct {
+	Ref               SkillRef `json:"ref"`
+	Constraint        string   `json:"constraint,omitempty"`
+	IncludePrerelease bool     `json:"include_prerelease,omitempty"`
+	AllowDeprecated   bool     `json:"allow_deprecated,omitempty"`
+	AllowYanked       bool     `json:"allow_yanked,omitempty"`
+}
+
+type SearchRequest struct {
+	Query     string `json:"query,omitempty"`
+	Namespace string `json:"namespace,omitempty"`
+	Limit     int    `json:"limit,omitempty"`
+}
+
 type ResolvedArtifact struct {
-	Name           string
-	Version        string
-	DownloadURL    string
-	SHA256         string
-	CompatibleWith []string
+	Namespace      string            `json:"namespace,omitempty"`
+	Name           string            `json:"name"`
+	Version        string            `json:"version"`
+	Registry       string            `json:"registry,omitempty"`
+	RegistryType   string            `json:"registry_type,omitempty"`
+	DownloadURL    string            `json:"download_url"`
+	ArtifactName   string            `json:"artifact_name,omitempty"`
+	SHA256         string            `json:"sha256,omitempty"`
+	PackageType    string            `json:"package_type,omitempty"`
+	CompatibleWith []string          `json:"compatible_with,omitempty"`
+	Metadata       map[string]string `json:"metadata,omitempty"`
 }
 
 type VersionInfo struct {
 	Version        string   `json:"version"`
 	Deprecated     bool     `json:"deprecated,omitempty"`
 	Yanked         bool     `json:"yanked,omitempty"`
+	Prerelease     bool     `json:"prerelease,omitempty"`
 	CompatibleWith []string `json:"compatible_with,omitempty"`
 }
 
 type SkillSearchResult struct {
-	Name        string `json:"name"`
-	Version     string `json:"version,omitempty"`
-	Description string `json:"description,omitempty"`
-	Source      string `json:"source,omitempty"`
+	Namespace     string `json:"namespace,omitempty"`
+	Name          string `json:"name"`
+	Version       string `json:"version,omitempty"`
+	LatestVersion string `json:"latest_version,omitempty"`
+	Description   string `json:"description,omitempty"`
+	Source        string `json:"source,omitempty"`
 }
 
 type SkillInfo struct {
+	Namespace      string        `json:"namespace,omitempty"`
 	Name           string        `json:"name"`
 	Description    string        `json:"description,omitempty"`
 	LatestVersion  string        `json:"latest_version,omitempty"`
 	Versions       []VersionInfo `json:"versions,omitempty"`
 	Source         string        `json:"source,omitempty"`
 	CompatibleWith []string      `json:"compatible_with,omitempty"`
+}
+
+type PublishRequest struct {
+	ArtifactPath string              `json:"artifact_path"`
+	Manifest     skill.SkillManifest `json:"manifest"`
+	SHA256       string              `json:"sha256"`
+	PackageType  string              `json:"package_type,omitempty"`
+	Force        bool                `json:"force,omitempty"`
+	DryRun       bool                `json:"dry_run,omitempty"`
+}
+
+type PublishResult struct {
+	Namespace   string `json:"namespace,omitempty"`
+	Name        string `json:"name"`
+	Version     string `json:"version"`
+	DownloadURL string `json:"download_url"`
+	SHA256      string `json:"sha256"`
+	Registry    string `json:"registry,omitempty"`
+	Created     bool   `json:"created"`
 }
 
 type PublishMetadata struct {
@@ -43,32 +101,59 @@ type PublishMetadata struct {
 }
 
 type RegistryCapabilities struct {
-	Resolve   bool `json:"resolve"`
-	Download  bool `json:"download"`
-	Search    bool `json:"search"`
-	Info      bool `json:"info"`
-	Publish   bool `json:"publish"`
-	Deprecate bool `json:"deprecate"`
-	Yank      bool `json:"yank"`
+	Resolve           bool `json:"resolve"`
+	Download          bool `json:"download"`
+	Search            bool `json:"search"`
+	Info              bool `json:"info"`
+	Publish           bool `json:"publish"`
+	Deprecate         bool `json:"deprecate"`
+	Yank              bool `json:"yank"`
+	Unyank            bool `json:"unyank"`
+	SemVerConstraints bool `json:"semver_constraints"`
+	Checksums         bool `json:"checksums"`
 }
 
-// Registry abstracts any source that can serve skill artifacts.
 type Registry interface {
-	// Resolve finds a matching version. version may be "" (latest) or an exact semver like "1.5.0".
-	Resolve(ctx context.Context, name, version string) (*ResolvedArtifact, error)
-	// Download streams the artifact bytes to dest.
+	Type() string
+	Name() string
+	Capabilities(ctx context.Context) (*RegistryCapabilities, error)
+	Resolve(ctx context.Context, req ResolveRequest) (*ResolvedArtifact, error)
 	Download(ctx context.Context, artifact *ResolvedArtifact, dest io.Writer) error
 }
 
 type DiscoveryRegistry interface {
-	ListVersions(ctx context.Context, name string) ([]VersionInfo, error)
-	Search(ctx context.Context, query string) ([]SkillSearchResult, error)
-	Info(ctx context.Context, name string) (*SkillInfo, error)
-	Capabilities(ctx context.Context) RegistryCapabilities
+	Search(ctx context.Context, req SearchRequest) ([]SkillSearchResult, error)
+	Info(ctx context.Context, ref SkillRef) (*SkillInfo, error)
+	ListVersions(ctx context.Context, ref SkillRef) ([]VersionInfo, error)
 }
 
 type PublishingRegistry interface {
-	Publish(ctx context.Context, artifactPath string, metadata PublishMetadata) error
-	Deprecate(ctx context.Context, name string, version string, reason string) error
-	Yank(ctx context.Context, name string, version string, reason string) error
+	Publish(ctx context.Context, req PublishRequest) (*PublishResult, error)
+}
+
+type GovernanceRegistry interface {
+	Deprecate(ctx context.Context, ref SkillVersionRef, reason string) error
+	Yank(ctx context.Context, ref SkillVersionRef, reason string) error
+	Unyank(ctx context.Context, ref SkillVersionRef) error
+}
+
+func ParseSkillRef(raw, defaultNamespace string) SkillRef {
+	raw = strings.TrimSpace(raw)
+	if defaultNamespace == "" {
+		defaultNamespace = "default"
+	}
+	if strings.Contains(raw, "/") {
+		parts := strings.SplitN(raw, "/", 2)
+		if parts[0] != "" && parts[1] != "" {
+			return SkillRef{Namespace: parts[0], Name: parts[1]}
+		}
+	}
+	return SkillRef{Namespace: defaultNamespace, Name: raw}
+}
+
+func Unsupported(registryName, operation, hint string) error {
+	if hint != "" {
+		return fmt.Errorf("registry %q does not support %s; %s", registryName, operation, hint)
+	}
+	return fmt.Errorf("registry %q does not support %s", registryName, operation)
 }

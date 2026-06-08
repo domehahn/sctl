@@ -266,7 +266,15 @@ func buildRegistryFromLock(sl lockfile.SkillLock) registry.Registry {
 // httpRegistry downloads directly from an artifact's DownloadURL via HTTP(S).
 type httpRegistry struct{}
 
-func (u *httpRegistry) Resolve(_ context.Context, _, _ string) (*registry.ResolvedArtifact, error) {
+func (u *httpRegistry) Type() string { return "http" }
+
+func (u *httpRegistry) Name() string { return "lockfile-url" }
+
+func (u *httpRegistry) Capabilities(context.Context) (*registry.RegistryCapabilities, error) {
+	return &registry.RegistryCapabilities{Download: true}, nil
+}
+
+func (u *httpRegistry) Resolve(_ context.Context, _ registry.ResolveRequest) (*registry.ResolvedArtifact, error) {
 	return nil, fmt.Errorf("httpRegistry.Resolve not supported — URL is taken from lockfile")
 }
 

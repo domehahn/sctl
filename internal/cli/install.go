@@ -265,17 +265,26 @@ func resolveManifest(cmd *cobra.Command, mf *manifest.ManifestFile, cfg *config.
 		}
 		fmt.Fprintln(cmd.OutOrStdout(), " ...")
 
-		artifact, err := reg.Resolve(cmd.Context(), entry.Name, entry.Version)
+		artifact, err := reg.Resolve(cmd.Context(), registry.ResolveRequest{
+			Ref:        registry.ParseSkillRef(entry.Name, ""),
+			Constraint: entry.Version,
+		})
 		if err != nil {
 			return nil, &UserError{Message: fmt.Sprintf("resolve %s: %v", entry.Name, err)}
 		}
 
 		lf.Upsert(lockfile.SkillLock{
-			Name:      entry.Name,
-			Version:   artifact.Version,
-			Source:    src,
-			SourceURL: artifact.DownloadURL,
-			SHA256:    artifact.SHA256,
+			Name:           entry.Name,
+			Namespace:      artifact.Namespace,
+			Version:        artifact.Version,
+			Source:         src,
+			RegistryType:   artifact.RegistryType,
+			SourceURL:      artifact.DownloadURL,
+			ArtifactName:   artifact.ArtifactName,
+			SHA256:         artifact.SHA256,
+			PackageType:    artifact.PackageType,
+			CompatibleWith: artifact.CompatibleWith,
+			Metadata:       artifact.Metadata,
 		})
 	}
 	return lf, nil

@@ -26,7 +26,7 @@ func TestLocalRegistryResolveExact(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "my-skill-1.2.3.zip"), []byte("zip"), 0o644))
 
 	r := registry.NewLocalRegistry(base)
-	art, err := r.Resolve(context.Background(), "my-skill", "1.2.3")
+	art, err := r.Resolve(context.Background(), registry.ResolveRequest{Ref: registry.SkillRef{Name: "my-skill"}, Constraint: "1.2.3"})
 	require.NoError(t, err)
 	assert.Equal(t, "my-skill", art.Name)
 	assert.Equal(t, "1.2.3", art.Version)
@@ -41,7 +41,7 @@ func TestLocalRegistryResolveLatest(t *testing.T) {
 	}
 
 	r := registry.NewLocalRegistry(base)
-	art, err := r.Resolve(context.Background(), "skill", "")
+	art, err := r.Resolve(context.Background(), registry.ResolveRequest{Ref: registry.SkillRef{Name: "skill"}})
 	require.NoError(t, err)
 	assert.Equal(t, "2.1.0", art.Version)
 }
@@ -51,7 +51,7 @@ func TestLocalRegistryMissingVersion(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(base, "skill"), 0o755))
 
 	r := registry.NewLocalRegistry(base)
-	_, err := r.Resolve(context.Background(), "skill", "")
+	_, err := r.Resolve(context.Background(), registry.ResolveRequest{Ref: registry.SkillRef{Name: "skill"}})
 	assert.Error(t, err)
 }
 
@@ -60,7 +60,7 @@ func TestLocalRegistryMissingArtifact(t *testing.T) {
 	require.NoError(t, os.MkdirAll(filepath.Join(base, "skill", "1.0.0"), 0o755))
 
 	r := registry.NewLocalRegistry(base)
-	_, err := r.Resolve(context.Background(), "skill", "1.0.0")
+	_, err := r.Resolve(context.Background(), registry.ResolveRequest{Ref: registry.SkillRef{Name: "skill"}, Constraint: "1.0.0"})
 	assert.Error(t, err)
 }
 
@@ -72,7 +72,7 @@ func TestLocalRegistryDownload(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "skill-1.0.0.zip"), content, 0o644))
 
 	r := registry.NewLocalRegistry(base)
-	art, err := r.Resolve(context.Background(), "skill", "1.0.0")
+	art, err := r.Resolve(context.Background(), registry.ResolveRequest{Ref: registry.SkillRef{Name: "skill"}, Constraint: "1.0.0"})
 	require.NoError(t, err)
 
 	var buf []byte
@@ -90,7 +90,7 @@ func TestArtifactoryResolveExact(t *testing.T) {
 	defer srv.Close()
 
 	reg := registry.NewArtifactoryRegistry(srv.URL, "skills", "token")
-	art, err := reg.Resolve(context.Background(), "my-skill", "1.0.0")
+	art, err := reg.Resolve(context.Background(), registry.ResolveRequest{Ref: registry.SkillRef{Name: "my-skill"}, Constraint: "1.0.0"})
 	require.NoError(t, err)
 	assert.Equal(t, "my-skill", art.Name)
 	assert.Equal(t, "1.0.0", art.Version)
@@ -250,7 +250,7 @@ func TestArtifactoryResolveLatestVersions(t *testing.T) {
 	defer srv.Close()
 
 	reg := registry.NewArtifactoryRegistry(srv.URL, "skills", "")
-	art, err := reg.Resolve(context.Background(), "my-skill", "")
+	art, err := reg.Resolve(context.Background(), registry.ResolveRequest{Ref: registry.SkillRef{Name: "my-skill"}})
 	require.NoError(t, err)
 	assert.Equal(t, "2.1.0", art.Version)
 }

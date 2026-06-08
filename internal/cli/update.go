@@ -6,6 +6,7 @@ import (
 	"github.com/domehahn/skpm/internal/config"
 	"github.com/domehahn/skpm/internal/lockfile"
 	"github.com/domehahn/skpm/internal/manifest"
+	"github.com/domehahn/skpm/internal/registry"
 	"github.com/spf13/cobra"
 )
 
@@ -38,11 +39,11 @@ func newUpdateCmd() *cobra.Command {
 					if src == "" {
 						src = cfg.DefaultRegistry
 					}
-					discovery, err := registryDiscovery(cmd.Context(), src, cfg)
+					reg, discovery, err := registryDiscovery(cmd.Context(), src, cfg)
 					if err != nil {
 						return &UserError{Message: err.Error()}
 					}
-					versions, err := discovery.ListVersions(cmd.Context(), mf.Skills[i].Name)
+					versions, err := discovery.ListVersions(cmd.Context(), registry.ParseSkillRef(mf.Skills[i].Name, registryDefaultNamespace(reg)))
 					if err != nil {
 						return &UserError{Message: err.Error()}
 					}

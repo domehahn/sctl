@@ -82,6 +82,7 @@ GitHub Copilot, and Codex. skpm installs, validates, and packages them.`,
 	root.AddCommand(newListCmd())
 	root.AddCommand(newSearchCmd())
 	root.AddCommand(newInfoCmd())
+	root.AddCommand(newRegistryCmd())
 	root.AddCommand(newValidateCmd())
 	root.AddCommand(newPackageCmd())
 	root.AddCommand(newPublishCmd())

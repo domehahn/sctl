@@ -114,17 +114,17 @@ func validateRegistryConfig(name string, rc config.RegistryConfig) []configError
 	var errs []configError
 	field := func(f string) string { return fmt.Sprintf("registries.%s.%s", name, f) }
 
-	validTypes := map[string]bool{"github": true, "gitlab": true, "artifactory": true, "local": true}
+	validTypes := map[string]bool{"github": true, "gitlab": true, "artifactory": true, "local": true, "skillforge": true, "generic-http": true}
 	if !validTypes[rc.Type] {
 		errs = append(errs, configError{
 			Field:   field("type"),
-			Message: fmt.Sprintf("%q is not a valid type (github, gitlab, artifactory, local)", rc.Type),
+			Message: fmt.Sprintf("%q is not a valid type (github, gitlab, artifactory, local, skillforge, generic-http)", rc.Type),
 		})
 		return errs
 	}
 
-	if rc.URL == "" {
-		errs = append(errs, configError{Field: field("url"), Message: "url is required"})
+	if rc.URL == "" && rc.Path == "" && rc.Repo == "" {
+		errs = append(errs, configError{Field: field("url"), Message: "url, path, or repo is required"})
 	}
 
 	switch rc.Type {
@@ -141,22 +141,48 @@ func validateRegistryConfig(name string, rc config.RegistryConfig) []configError
 			})
 		}
 	case "github":
-		if rc.URL != "" && strings.HasPrefix(rc.URL, "https://") {
+		repo := rc.Repo
+		if repo == "" {
+			repo = rc.URL
+		}
+		if repo != "" && strings.HasPrefix(repo, "https://") {
+			fieldName := "repo"
+			if rc.Repo == "" && rc.URL != "" {
+				fieldName = "url"
+			}
 			errs = append(errs, configError{
-				Field:   field("url"),
-				Message: "github url must be owner/repo (e.g. myorg/agent-skills), not a full URL",
+				Field:   field(fieldName),
+				Message: "github repo must be owner/repo (e.g. myorg/agent-skills), not a full URL",
 			})
-		} else if rc.URL != "" && !strings.Contains(rc.URL, "/") {
+		} else if repo != "" && !strings.Contains(repo, "/") {
+			fieldName := "repo"
+			if rc.Repo == "" && rc.URL != "" {
+				fieldName = "url"
+			}
 			errs = append(errs, configError{
-				Field:   field("url"),
-				Message: fmt.Sprintf("%q must be in owner/repo format", rc.URL),
+				Field:   field(fieldName),
+				Message: fmt.Sprintf("%q must be in owner/repo format", repo),
 			})
 		}
 	case "artifactory":
-		if rc.URL != "" && !strings.Contains(rc.URL, "#") {
+		if rc.Repo == "" && rc.URL != "" && strings.Contains(rc.URL, "#") {
+			return errs
+		}
+		if rc.Repo == "" {
+			fieldName := "repo"
+			if rc.URL != "" {
+				fieldName = "url"
+			}
 			errs = append(errs, configError{
-				Field:   field("url"),
-				Message: "artifactory url must be in format <base-url>#<repo-name> (e.g. https://artifactory.company.com/artifactory#agent-skills)",
+				Field:   field(fieldName),
+				Message: "repo is required for artifactory registries (or use legacy url format <base-url>#<repo>)",
+			})
+		}
+	case "generic-http":
+		if rc.Endpoints["resolve"] == "" && rc.Endpoints["download"] == "" {
+			errs = append(errs, configError{
+				Field:   field("endpoints"),
+				Message: "generic-http should define at least endpoints.resolve or endpoints.download",
 			})
 		}
 	}
@@ -219,12 +245,32 @@ func maskTokens(cfg *config.Config) map[string]interface{} {
 		if rc.Token != "" {
 			token = "***"
 		}
+		auth := rc.Auth
+		if auth.Token != "" {
+			auth.Token = "***"
+		}
+		if auth.Password != "" {
+			auth.Password = "***"
+		}
 		entry := map[string]interface{}{
-			"type": rc.Type,
-			"url":  rc.URL,
+			"type":      rc.Type,
+			"url":       rc.URL,
+			"repo":      rc.Repo,
+			"path":      rc.Path,
+			"namespace": rc.Namespace,
+			"auth":      auth,
 		}
 		if rc.Project != "" {
 			entry["project"] = rc.Project
+		}
+		if len(rc.Headers) > 0 {
+			entry["headers"] = rc.Headers
+		}
+		if len(rc.Endpoints) > 0 {
+			entry["endpoints"] = rc.Endpoints
+		}
+		if len(rc.Capabilities) > 0 {
+			entry["capabilities"] = rc.Capabilities
 		}
 		entry["token"] = token
 		registries[name] = entry

@@ -13,6 +13,7 @@ import (
 
 type GitHubRegistry struct {
 	client *github.Client
+	name   string
 	org    string
 	repo   string
 	token  string
@@ -33,17 +34,33 @@ func NewGitHubRegistry(repoSlug, token string) (*GitHubRegistry, error) {
 	}
 	return &GitHubRegistry{
 		client: github.NewClient(httpClient),
+		name:   "github",
 		org:    parts[0],
 		repo:   parts[1],
 		token:  token,
 	}, nil
 }
 
-func (r *GitHubRegistry) Resolve(ctx context.Context, name, version string) (*ResolvedArtifact, error) {
+func (r *GitHubRegistry) Type() string { return "github" }
+
+func (r *GitHubRegistry) Name() string { return r.name }
+
+func (r *GitHubRegistry) WithName(name string) *GitHubRegistry {
+	r.name = name
+	return r
+}
+
+func (r *GitHubRegistry) Capabilities(context.Context) (*RegistryCapabilities, error) {
+	return &RegistryCapabilities{Resolve: true, Download: true, Checksums: false}, nil
+}
+
+func (r *GitHubRegistry) Resolve(ctx context.Context, req ResolveRequest) (*ResolvedArtifact, error) {
+	name := req.Ref.Name
+	version := req.Constraint
 	var release *github.RepositoryRelease
 	var err error
 
-	if version == "" {
+	if version == "" || version == "latest" {
 		release, _, err = r.client.Repositories.GetLatestRelease(ctx, r.org, r.repo)
 	} else {
 		release, _, err = r.client.Repositories.GetReleaseByTag(ctx, r.org, r.repo, name+"/v"+version)
@@ -61,9 +78,14 @@ func (r *GitHubRegistry) Resolve(ctx context.Context, name, version string) (*Re
 	for _, asset := range release.Assets {
 		if asset.GetName() == fmt.Sprintf("%s-%s.zip", name, extractVersion(release.GetTagName(), name)) {
 			return &ResolvedArtifact{
-				Name:        name,
-				Version:     extractVersion(release.GetTagName(), name),
-				DownloadURL: asset.GetBrowserDownloadURL(),
+				Namespace:    req.Ref.Namespace,
+				Name:         name,
+				Version:      extractVersion(release.GetTagName(), name),
+				Registry:     r.name,
+				RegistryType: r.Type(),
+				DownloadURL:  asset.GetBrowserDownloadURL(),
+				ArtifactName: asset.GetName(),
+				PackageType:  "zip",
 			}, nil
 		}
 	}

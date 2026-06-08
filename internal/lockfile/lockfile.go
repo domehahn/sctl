@@ -21,13 +21,18 @@ type LockFile struct {
 }
 
 type SkillLock struct {
-	Name           string   `yaml:"name"`
-	Version        string   `yaml:"version"`
-	Source         string   `yaml:"source"`
-	SourceURL      string   `yaml:"source_url"`
-	SHA256         string   `yaml:"sha256"`
-	CompatibleWith []string `yaml:"compatible_with,omitempty"`
-	InstalledTo    []string `yaml:"installed_to,omitempty"`
+	Name           string            `yaml:"name"`
+	Namespace      string            `yaml:"namespace,omitempty"`
+	Version        string            `yaml:"version"`
+	Source         string            `yaml:"source"`
+	RegistryType   string            `yaml:"registry_type,omitempty"`
+	SourceURL      string            `yaml:"source_url"`
+	ArtifactName   string            `yaml:"artifact_name,omitempty"`
+	SHA256         string            `yaml:"sha256"`
+	PackageType    string            `yaml:"package_type,omitempty"`
+	CompatibleWith []string          `yaml:"compatible_with,omitempty"`
+	InstalledTo    []string          `yaml:"installed_to,omitempty"`
+	Metadata       map[string]string `yaml:"metadata,omitempty"`
 }
 
 func New() *LockFile {
