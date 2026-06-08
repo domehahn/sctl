@@ -93,12 +93,13 @@ func (r *GenericHTTPRegistry) Capabilities(ctx context.Context) (*RegistryCapabi
 		Download:          r.supports("download"),
 		Search:            r.supports("search"),
 		Info:              r.supports("info"),
+		ListVersions:      r.supports("versions"),
 		Publish:           r.supports("publish"),
 		Deprecate:         r.supports("deprecate"),
 		Yank:              r.supports("yank"),
 		Unyank:            r.supports("unyank"),
-		SemVerConstraints: true,
-		Checksums:         true,
+		SemVerConstraints: r.supports("semver_constraints"),
+		Checksums:         r.supports("checksums"),
 	}, nil
 }
 
