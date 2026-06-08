@@ -23,7 +23,7 @@ Agent skills are SKILL.md files that give coding assistants domain-specific know
 ## Install
 
 ```bash
-go install github.com/domehahn/skpm/cmd/skpm@latest
+go install github.com/domehahn/skpm/v2/cmd/skpm@latest
 ```
 
 Or download a pre-built binary from the [releases page](https://github.com/domehahn/skpm/releases).
@@ -209,7 +209,7 @@ Checks:
 
 - File is valid YAML
 - `default_registry` references a defined registry entry
-- Every registry has a known `type` (`github`, `gitlab`, `artifactory`, `local`)
+- Every registry has a known `type` (`skillforge`, `github`, `gitlab`, `artifactory`, `local`, `generic-http`)
 - `gitlab` registries have `project` set in `namespace/project` format
 - `github` registries have `url` in `owner/repo` format (not a full URL)
 - `artifactory` registries have `url` in `<base-url>#<repo-name>` format
