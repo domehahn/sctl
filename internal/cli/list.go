@@ -27,7 +27,7 @@ func newListCmd() *cobra.Command {
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "%-28s %-12s %-16s %-28s %s\n", "Name", "Version", "Source", "Platforms", "Installed to")
 			for _, sl := range lf.Skills {
-				platforms := strings.Join(sl.CompatibleWith, ",")
+				platforms := strings.Join(platformsToStrings(sl.CompatibleWith), ",")
 				if platforms == "" {
 					platforms = "-"
 				}

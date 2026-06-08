@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/domehahn/sklib/spec"
 	"github.com/domehahn/skpm/v2/internal/manifest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -87,4 +88,36 @@ func TestVersionDefault(t *testing.T) {
 	mf, err := manifest.Read(path)
 	require.NoError(t, err)
 	assert.Equal(t, 1, mf.Version)
+}
+
+// TestSkillEntryIsSpecManifestSkill verifies the type alias is in effect:
+// a spec.ManifestSkill can be assigned to manifest.SkillEntry without conversion.
+func TestSkillEntryIsSpecManifestSkill(t *testing.T) {
+	var entry manifest.SkillEntry = spec.ManifestSkill{
+		Name:      "alias-check",
+		Version:   "^1.0.0",
+		Platforms: []spec.Platform{spec.PlatformClaudeCode},
+	}
+	assert.Equal(t, "alias-check", entry.Name)
+	assert.Equal(t, []spec.Platform{spec.PlatformClaudeCode}, entry.Platforms)
+}
+
+// TestRoundtripPlatforms verifies that Platforms []spec.Platform in SkillEntry
+// survives a write-read cycle with the correct YAML key.
+func TestRoundtripPlatforms(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, manifest.DefaultFilename)
+
+	mf := manifest.New()
+	mf.Upsert(manifest.SkillEntry{
+		Name:      "plat-skill",
+		Version:   "1.0.0",
+		Platforms: []spec.Platform{spec.PlatformClaudeCode, spec.PlatformCursor},
+	})
+	require.NoError(t, mf.Write(path))
+
+	loaded, err := manifest.Read(path)
+	require.NoError(t, err)
+	require.Len(t, loaded.Skills, 1)
+	assert.Equal(t, []spec.Platform{spec.PlatformClaudeCode, spec.PlatformCursor}, loaded.Skills[0].Platforms)
 }

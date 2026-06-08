@@ -21,12 +21,12 @@ import (
 	"github.com/domehahn/skpm/v2/internal/registry"
 	"github.com/domehahn/skpm/v2/internal/skill"
 	"golang.org/x/mod/semver"
-	"gopkg.in/yaml.v3"
 )
 
 func lockFromManifest(ctx context.Context, mf *manifest.ManifestFile, cfg *config.Config, lockPath string) (*lockfile.LockFile, error) {
 	lf := lockfile.New()
-	lf.GeneratedAt = time.Now().UTC().Format(time.RFC3339)
+	lf.ResolvedAt = time.Now().UTC().Format(time.RFC3339)
+	lf.GeneratedBy = "skpm"
 
 	for _, entry := range mf.Skills {
 		src := entry.Source
@@ -66,7 +66,7 @@ func lockFromManifest(ctx context.Context, mf *manifest.ManifestFile, cfg *confi
 			Artifact:       artifact.ArtifactName,
 			SHA256:         artifact.SHA256,
 			PackageType:    artifact.PackageType,
-			CompatibleWith: platforms,
+			CompatibleWith: stringsToPlatforms(platforms),
 			InstalledTo:    installPaths,
 			Metadata:       artifact.Metadata,
 		})
@@ -103,29 +103,6 @@ func sameLockedSkills(a, b *lockfile.LockFile) bool {
 	return reflect.DeepEqual(aa, bb)
 }
 
-func readSkillPlatformsFromZip(path string) ([]string, error) {
-	r, err := zip.OpenReader(path)
-	if err != nil {
-		return nil, err
-	}
-	defer r.Close()
-	for _, f := range r.File {
-		if f.Name != "skill.yaml" {
-			continue
-		}
-		rc, err := f.Open()
-		if err != nil {
-			return nil, err
-		}
-		defer rc.Close()
-		var sy skill.SkillYAML
-		if err := yaml.NewDecoder(rc).Decode(&sy); err != nil {
-			return nil, err
-		}
-		return platformsToStrings(sy.CompatibleWith), nil
-	}
-	return nil, fmt.Errorf("skill.yaml not found")
-}
 
 func sha256File(path string) (string, error) {
 	f, err := os.Open(path)

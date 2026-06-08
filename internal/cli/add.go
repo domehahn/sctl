@@ -138,7 +138,7 @@ For skills without a release tag, use --ref to download from a branch or commit:
 					Artifact:       artifact.ArtifactName,
 					SHA256:         actualSHA,
 					PackageType:    artifact.PackageType,
-					CompatibleWith: platformsToStrings(compatibleWith),
+					CompatibleWith: compatibleWith,
 					InstalledTo:    installPaths,
 					Metadata:       artifact.Metadata,
 				})
@@ -321,7 +321,7 @@ func addFromLocalPath(cmd *cobra.Command, path string, format OutputFormat, opts
 			RegistryType:   "local",
 			DownloadURL:    sourceURL,
 			PackageType:    "directory",
-			CompatibleWith: platformsToStrings(sy.CompatibleWith),
+			CompatibleWith: sy.CompatibleWith,
 			InstalledTo:    installPaths,
 		})
 		if err := lf.Write(lockfile.DefaultFilename); err != nil {

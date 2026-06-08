@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/domehahn/sklib/spec"
 	"github.com/domehahn/skpm/v2/internal/lockfile"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -108,4 +109,57 @@ func TestVersionDefault(t *testing.T) {
 	lf, err := lockfile.Read(path)
 	require.NoError(t, err)
 	assert.Equal(t, 1, lf.Version)
+}
+
+// TestRoundtripResolvedAt verifies that ResolvedAt/GeneratedBy survive a write-read
+// cycle with the correct YAML keys (resolved_at / generated_by, not generated_at).
+func TestRoundtripResolvedAt(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, lockfile.DefaultFilename)
+
+	lf := lockfile.New()
+	lf.ResolvedAt = "2026-01-01T00:00:00Z"
+	lf.GeneratedBy = "skpm"
+	require.NoError(t, lf.Write(path))
+
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+	raw := string(data)
+	assert.Contains(t, raw, "resolved_at:")
+	assert.Contains(t, raw, "generated_by:")
+	assert.NotContains(t, raw, "generated_at:")
+
+	loaded, err := lockfile.Read(path)
+	require.NoError(t, err)
+	assert.Equal(t, "2026-01-01T00:00:00Z", loaded.ResolvedAt)
+	assert.Equal(t, "skpm", loaded.GeneratedBy)
+}
+
+// TestCompatibleWithPlatforms verifies that CompatibleWith []spec.Platform survives
+// a write-read cycle and is still typed as []spec.Platform (not []string).
+func TestCompatibleWithPlatforms(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, lockfile.DefaultFilename)
+
+	lf := lockfile.New()
+	lf.Upsert(lockfile.SkillLock{
+		Name:           "plat-skill",
+		Version:        "1.0.0",
+		Source:         "github",
+		SHA256:         "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		CompatibleWith: []spec.Platform{spec.PlatformClaudeCode, spec.PlatformCursor},
+	})
+	require.NoError(t, lf.Write(path))
+
+	loaded, err := lockfile.Read(path)
+	require.NoError(t, err)
+	require.Len(t, loaded.Skills, 1)
+	assert.Equal(t, []spec.Platform{spec.PlatformClaudeCode, spec.PlatformCursor}, loaded.Skills[0].CompatibleWith)
+}
+
+// TestSkillLockIsSpecLockedSkill verifies the type alias is in effect:
+// a spec.LockedSkill can be assigned to lockfile.SkillLock without conversion.
+func TestSkillLockIsSpecLockedSkill(t *testing.T) {
+	var sl lockfile.SkillLock = spec.LockedSkill{Name: "alias-check", Version: "0.1.0", Source: "local"}
+	assert.Equal(t, "alias-check", sl.Name)
 }

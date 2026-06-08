@@ -6,6 +6,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/domehahn/sklib/registryapi"
 	"github.com/domehahn/skpm/v2/internal/skill"
 )
 
@@ -100,18 +101,9 @@ type PublishMetadata struct {
 	Description string
 }
 
-type RegistryCapabilities struct {
-	Resolve           bool `json:"resolve"`
-	Download          bool `json:"download"`
-	Search            bool `json:"search"`
-	Info              bool `json:"info"`
-	Publish           bool `json:"publish"`
-	Deprecate         bool `json:"deprecate"`
-	Yank              bool `json:"yank"`
-	Unyank            bool `json:"unyank"`
-	SemVerConstraints bool `json:"semver_constraints"`
-	Checksums         bool `json:"checksums"`
-}
+// RegistryCapabilities is aliased from sklib/registryapi so the canonical
+// capabilities schema is shared across skpm, skcr, and SkillForge.
+type RegistryCapabilities = registryapi.RegistryCapabilities
 
 type Registry interface {
 	Type() string

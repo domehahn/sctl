@@ -43,14 +43,14 @@ func newVerifyCmd() *cobra.Command {
 					errors = append(errors, fmt.Sprintf("%s: missing sha256", sl.Name))
 				}
 				for _, p := range sl.CompatibleWith {
-					if !skill.KnownPlatforms[skill.Platform(p)] {
+					if !skill.KnownPlatforms[p] {
 						errors = append(errors, fmt.Sprintf("%s: unknown platform %s", sl.Name, p))
 					}
 				}
 				if platform != "" && len(sl.CompatibleWith) > 0 {
 					matches := false
 					for _, p := range sl.CompatibleWith {
-						matches = matches || p == platform || p == string(skill.PlatformAll)
+						matches = matches || string(p) == platform || p == skill.PlatformAll
 					}
 					if !matches {
 						errors = append(errors, fmt.Sprintf("%s: not compatible with %s", sl.Name, platform))

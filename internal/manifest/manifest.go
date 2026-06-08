@@ -25,18 +25,9 @@ type ManifestFile struct {
 	Metadata        map[string]string         `yaml:"metadata,omitempty"`
 }
 
-// SkillEntry is a single skill declared in agent-skills.yaml.
-type SkillEntry struct {
-	Name      string            `yaml:"name"`
-	Namespace string            `yaml:"namespace,omitempty"`
-	Version   string            `yaml:"version,omitempty"`  // version constraint; empty = latest
-	Source    string            `yaml:"source,omitempty"`   // registry alias; empty = default_registry
-	Target    string            `yaml:"target,omitempty"`   // install path override
-	Platforms []spec.Platform   `yaml:"platforms,omitempty"`
-	Path      string            `yaml:"path,omitempty"`     // local path (local registry)
-	Ref       string            `yaml:"ref,omitempty"`      // git ref (local registry)
-	Metadata  map[string]string `yaml:"metadata,omitempty"`
-}
+// SkillEntry is aliased from sklib/spec so the canonical agent-skills.yaml schema
+// is shared across skpm, skcr, and SkillForge.
+type SkillEntry = spec.ManifestSkill
 
 func New() *ManifestFile {
 	return &ManifestFile{Version: 1}

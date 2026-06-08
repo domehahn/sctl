@@ -154,7 +154,7 @@ func filterLockfileForPlatform(lf *lockfile.LockFile, platform string) {
 			continue
 		}
 		for _, p := range sl.CompatibleWith {
-			if p == platform || p == "all" {
+			if string(p) == platform || p == skill.PlatformAll {
 				out = append(out, sl)
 				break
 			}
@@ -184,7 +184,7 @@ func fillMissingInstallPaths(lf *lockfile.LockFile) {
 		if len(lf.Skills[i].InstalledTo) > 0 {
 			continue
 		}
-		platforms := stringsToPlatforms(lf.Skills[i].CompatibleWith)
+		platforms := lf.Skills[i].CompatibleWith
 		if len(platforms) == 0 {
 			platforms = []skill.Platform{skill.PlatformAll}
 		}
@@ -283,7 +283,7 @@ func resolveManifest(cmd *cobra.Command, mf *manifest.ManifestFile, cfg *config.
 			Artifact:       artifact.ArtifactName,
 			SHA256:         artifact.SHA256,
 			PackageType:    artifact.PackageType,
-			CompatibleWith: artifact.CompatibleWith,
+			CompatibleWith: stringsToPlatforms(artifact.CompatibleWith),
 			Metadata:       artifact.Metadata,
 		})
 	}

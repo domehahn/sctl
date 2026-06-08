@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sort"
 
+	"github.com/domehahn/sklib/spec"
 	"gopkg.in/yaml.v3"
 )
 
@@ -14,26 +15,15 @@ const (
 	currentVersion  = 1
 )
 
+// SkillLock is aliased from sklib/spec so the canonical lockfile schema is
+// shared across skpm, skcr, and SkillForge.
+type SkillLock = spec.LockedSkill
+
 type LockFile struct {
 	Version     int         `yaml:"version"`
-	GeneratedAt string      `yaml:"generated_at,omitempty"`
+	GeneratedBy string      `yaml:"generated_by,omitempty"`
+	ResolvedAt  string      `yaml:"resolved_at,omitempty"`
 	Skills      []SkillLock `yaml:"skills"`
-}
-
-type SkillLock struct {
-	Name           string            `yaml:"name"`
-	Namespace      string            `yaml:"namespace,omitempty"`
-	Version        string            `yaml:"version"`
-	Source         string            `yaml:"source"`
-	RegistryType   string            `yaml:"registry_type,omitempty"`
-	RegistryURL    string            `yaml:"registry_url,omitempty"`
-	Artifact       string            `yaml:"artifact,omitempty"`
-	DownloadURL    string            `yaml:"download_url"`
-	SHA256         string            `yaml:"sha256"`
-	PackageType    string            `yaml:"package_type,omitempty"`
-	CompatibleWith []string          `yaml:"compatible_with,omitempty"`
-	InstalledTo    []string          `yaml:"installed_to,omitempty"`
-	Metadata       map[string]string `yaml:"metadata,omitempty"`
 }
 
 func New() *LockFile {

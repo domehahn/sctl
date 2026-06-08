@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/domehahn/sklib/packageio"
+	"github.com/domehahn/sklib/spec"
 	"github.com/domehahn/skpm/v2/internal/skill"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -787,4 +789,81 @@ compatible_with:
 	var buf bytes.Buffer
 	require.NoError(t, json.Compact(&buf, data))
 	assert.True(t, buf.Len() > 0)
+}
+
+// TestSkillManifestIsSpecPackageManifest verifies the type alias is in effect:
+// skill.SkillManifest and spec.PackageManifest are the same type.
+func TestSkillManifestIsSpecPackageManifest(t *testing.T) {
+	var m skill.SkillManifest = spec.PackageManifest{
+		Name:    "alias-check",
+		Version: "1.0.0",
+	}
+	assert.Equal(t, "alias-check", m.Name)
+}
+
+// TestPackageManifestRoundtrip verifies that the manifest.json produced by the
+// packager deserializes into spec.PackageManifest with the expected field values.
+func TestPackageManifestRoundtrip(t *testing.T) {
+	dir := writeSkillFixture(t, validSkillFiles)
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "tests"), 0o755))
+	result, err := skill.NewPackager().Package(context.Background(), dir, t.TempDir())
+	require.NoError(t, err)
+
+	zr, err := zip.OpenReader(result.OutputPath)
+	require.NoError(t, err)
+	defer zr.Close()
+
+	var manifest spec.PackageManifest
+	for _, f := range zr.File {
+		if f.Name == "manifest.json" {
+			rc, err := f.Open()
+			require.NoError(t, err)
+			require.NoError(t, json.NewDecoder(rc).Decode(&manifest))
+			rc.Close()
+			break
+		}
+	}
+
+	assert.Equal(t, "my-skill", manifest.Name)
+	assert.Equal(t, "1.2.3", manifest.Version)
+	assert.Equal(t, "zip", manifest.PackageType)
+	assert.Equal(t, 1, manifest.SpecVersion)
+	assert.NotEmpty(t, manifest.Files)
+	assert.Contains(t, manifest.CompatibleWith, spec.Platform(spec.PlatformClaudeCode))
+}
+
+// TestPackageChecksumsRoundtrip verifies that checksums.txt produced by the
+// packager is parseable by packageio.ParseChecksumsText.
+func TestPackageChecksumsRoundtrip(t *testing.T) {
+	dir := writeSkillFixture(t, validSkillFiles)
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "tests"), 0o755))
+	result, err := skill.NewPackager().Package(context.Background(), dir, t.TempDir())
+	require.NoError(t, err)
+
+	zr, err := zip.OpenReader(result.OutputPath)
+	require.NoError(t, err)
+	defer zr.Close()
+
+	var checksumData []byte
+	for _, f := range zr.File {
+		if f.Name == "checksums.txt" {
+			rc, err := f.Open()
+			require.NoError(t, err)
+			var buf bytes.Buffer
+			_, err = buf.ReadFrom(rc)
+			require.NoError(t, err)
+			rc.Close()
+			checksumData = buf.Bytes()
+			break
+		}
+	}
+	require.NotEmpty(t, checksumData, "checksums.txt not found in package")
+
+	entries, err := packageio.ParseChecksumsText(checksumData)
+	require.NoError(t, err)
+	assert.NotEmpty(t, entries)
+	for _, e := range entries {
+		assert.NotEmpty(t, e.Path)
+		assert.Len(t, e.SHA256, 64)
+	}
 }

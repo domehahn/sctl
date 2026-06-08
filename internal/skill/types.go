@@ -125,21 +125,6 @@ func (s *SkillYAML) supportsPlatform(p Platform) bool {
 	return spec.SupportsPlatform(s.CompatibleWith, p)
 }
 
-// SkillManifest is the manifest.json embedded in a packaged skill artifact.
-// Field names and structure match schemas/package-manifest.schema.json from skillspec.
-type SkillManifest struct {
-	SpecVersion    int        `json:"spec_version"`
-	Name           string     `json:"name"`
-	Namespace      string     `json:"namespace,omitempty"`
-	Version        string     `json:"version"`
-	Description    string     `json:"description,omitempty"`
-	Entrypoint     string     `json:"entrypoint,omitempty"`
-	CompatibleWith []Platform `json:"compatible_with,omitempty"`
-	PackageType    string     `json:"package_type"`
-	SHA256         string     `json:"sha256,omitempty"`
-	Files          []string   `json:"files,omitempty"`
-	PackagedBy     string     `json:"packaged_by,omitempty"`
-	PackagedAt     string     `json:"packaged_at,omitempty"`
-	SourceCommit   string     `json:"source_commit,omitempty"`
-	License        string     `json:"license,omitempty"`
-}
+// SkillManifest is aliased from sklib/spec so the canonical manifest.json schema
+// is defined in one place and shared across skpm, skcr, and SkillForge.
+type SkillManifest = spec.PackageManifest
