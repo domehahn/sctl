@@ -2,6 +2,7 @@ package skill_test
 
 import (
 	"archive/zip"
+	"bytes"
 	"context"
 	"encoding/json"
 	"os"
@@ -13,7 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// ── test helpers ──────────────────────────────────────────────────────────
+// ── helpers ───────────────────────────────────────────────────────────────
 
 func writeSkillFixture(t *testing.T, files map[string]string) string {
 	t.Helper()
@@ -30,6 +31,8 @@ var validSkillFiles = map[string]string{
 	"SKILL.md":     "# My Skill\nDoes things.",
 	"VERSION":      "1.2.3",
 	"CHANGELOG.md": "# Changelog\n\n## 1.2.3\n\n- Initial release\n",
+	"README.md":    "# My Skill\n",
+	"LICENSE":      "MIT\n",
 	"skill.yaml": `name: my-skill
 version: "1.2.3"
 description: Does things
@@ -54,131 +57,579 @@ func assertErrorField(t *testing.T, res *skill.ValidationResult, field string) {
 			return
 		}
 	}
-	t.Errorf("expected error for field %q, got: %+v", field, res.Errors)
+	t.Errorf("expected error for field %q, got errors: %+v", field, res.Errors)
 }
 
-// ── Validator tests ───────────────────────────────────────────────────────
+func assertErrorCode(t *testing.T, res *skill.ValidationResult, code string) {
+	t.Helper()
+	for _, e := range res.Errors {
+		if e.Code == code {
+			return
+		}
+	}
+	t.Errorf("expected error with code %q, got errors: %+v", code, res.Errors)
+}
+
+func assertWarnField(t *testing.T, res *skill.ValidationResult, field string) {
+	t.Helper()
+	for _, w := range res.Warnings {
+		if w.Field == field {
+			return
+		}
+	}
+	t.Errorf("expected warning for field %q, got warnings: %+v", field, res.Warnings)
+}
+
+func validate(t *testing.T, files map[string]string, opts skill.ValidationOptions) *skill.ValidationResult {
+	t.Helper()
+	res, err := skill.NewValidatorWithOptions(opts).Validate(context.Background(), writeSkillFixture(t, files))
+	require.NoError(t, err)
+	return res
+}
+
+func defaultValidate(t *testing.T, files map[string]string) *skill.ValidationResult {
+	return validate(t, files, skill.ValidationOptions{})
+}
+
+func strictValidate(t *testing.T, files map[string]string) *skill.ValidationResult {
+	return validate(t, files, skill.ValidationOptions{Strict: true})
+}
+
+func publishValidate(t *testing.T, files map[string]string) *skill.ValidationResult {
+	return validate(t, files, skill.ValidationOptions{Publish: true})
+}
+
+// ── Default validation ────────────────────────────────────────────────────
 
 func TestValidateValidSkill(t *testing.T) {
-	dir := writeSkillFixture(t, validSkillFiles)
-	res, err := skill.NewValidator().Validate(context.Background(), dir)
-	require.NoError(t, err)
+	res := defaultValidate(t, validSkillFiles)
 	assert.True(t, res.Valid)
 	assert.Empty(t, res.Errors)
+	assert.Equal(t, "default", res.Profile)
 }
 
 func TestValidateMissingSkillMD(t *testing.T) {
 	files := copyMap(validSkillFiles)
 	delete(files, "SKILL.md")
-	res, err := skill.NewValidator().Validate(context.Background(), writeSkillFixture(t, files))
-	require.NoError(t, err)
+	res := defaultValidate(t, files)
 	assert.False(t, res.Valid)
 	assertErrorField(t, res, "SKILL.md")
+	assertErrorCode(t, res, "missing_skill_md")
 }
 
 func TestValidateEmptySkillMD(t *testing.T) {
 	files := copyMap(validSkillFiles)
 	files["SKILL.md"] = ""
-	res, err := skill.NewValidator().Validate(context.Background(), writeSkillFixture(t, files))
-	require.NoError(t, err)
+	res := defaultValidate(t, files)
 	assert.False(t, res.Valid)
-	assertErrorField(t, res, "SKILL.md")
+	assertErrorCode(t, res, "empty_skill_md")
 }
 
 func TestValidateMissingVERSION(t *testing.T) {
 	files := copyMap(validSkillFiles)
 	delete(files, "VERSION")
-	res, err := skill.NewValidator().Validate(context.Background(), writeSkillFixture(t, files))
-	require.NoError(t, err)
+	res := defaultValidate(t, files)
 	assert.False(t, res.Valid)
-	assertErrorField(t, res, "VERSION")
+	assertErrorCode(t, res, "missing_version")
 }
 
 func TestValidateInvalidSemver(t *testing.T) {
 	files := copyMap(validSkillFiles)
 	files["VERSION"] = "not-a-version"
-	res, err := skill.NewValidator().Validate(context.Background(), writeSkillFixture(t, files))
-	require.NoError(t, err)
+	res := defaultValidate(t, files)
 	assert.False(t, res.Valid)
-	assertErrorField(t, res, "VERSION")
+	assertErrorCode(t, res, "invalid_semver")
+}
+
+func TestValidatePrereleaseVersionRejectedByDefault(t *testing.T) {
+	files := copyMap(validSkillFiles)
+	files["VERSION"] = "1.2.3-beta.1"
+	files["skill.yaml"] = `name: my-skill
+version: "1.2.3-beta.1"
+description: Does things
+compatible_with:
+  - claude-code
+`
+	res := defaultValidate(t, files)
+	assert.False(t, res.Valid)
+	assertErrorCode(t, res, "prerelease_version")
+}
+
+func TestValidatePrereleaseVersionAllowed(t *testing.T) {
+	files := copyMap(validSkillFiles)
+	files["VERSION"] = "1.2.3-beta.1"
+	files["skill.yaml"] = `name: my-skill
+version: "1.2.3-beta.1"
+description: Does things
+compatible_with:
+  - claude-code
+`
+	res := validate(t, files, skill.ValidationOptions{AllowPrerelease: true})
+	assert.True(t, res.Valid)
 }
 
 func TestValidateVersionMismatch(t *testing.T) {
 	files := copyMap(validSkillFiles)
 	files["VERSION"] = "2.0.0"
-	res, err := skill.NewValidator().Validate(context.Background(), writeSkillFixture(t, files))
-	require.NoError(t, err)
+	res := defaultValidate(t, files)
 	assert.False(t, res.Valid)
-	assertErrorField(t, res, "skill.yaml")
+	assertErrorCode(t, res, "version_mismatch")
+}
+
+func TestValidateVersionVPrefixStripped(t *testing.T) {
+	files := copyMap(validSkillFiles)
+	files["VERSION"] = "v1.2.3"
+	res := defaultValidate(t, files)
+	assert.True(t, res.Valid, "leading v in VERSION should be stripped before comparison")
 }
 
 func TestValidateUnknownPlatform(t *testing.T) {
 	files := copyMap(validSkillFiles)
-	files["skill.yaml"] = "name: my-skill\nversion: \"1.2.3\"\ncompatible_with:\n  - unknown-agent\n"
-	res, err := skill.NewValidator().Validate(context.Background(), writeSkillFixture(t, files))
-	require.NoError(t, err)
+	files["skill.yaml"] = `name: my-skill
+version: "1.2.3"
+description: Does things
+compatible_with:
+  - unknown-agent
+`
+	res := defaultValidate(t, files)
 	assert.False(t, res.Valid)
-	assertErrorField(t, res, "skill.yaml")
+	assertErrorCode(t, res, "unknown_platform")
+}
+
+func TestValidatePlatformAlias(t *testing.T) {
+	files := copyMap(validSkillFiles)
+	files["skill.yaml"] = `name: my-skill
+version: "1.2.3"
+description: Does things
+compatible_with:
+  - gitlab
+`
+	res := defaultValidate(t, files)
+	// aliases are currently accepted (not flagged as unknown) — normalization happens in format
+	assert.True(t, res.Valid)
 }
 
 func TestValidateMissingChangelog(t *testing.T) {
 	files := copyMap(validSkillFiles)
 	delete(files, "CHANGELOG.md")
-	res, err := skill.NewValidator().Validate(context.Background(), writeSkillFixture(t, files))
-	require.NoError(t, err)
+	res := defaultValidate(t, files)
 	assert.True(t, res.Valid)
-	assert.NotEmpty(t, res.Warnings)
+	assertWarnField(t, res, "CHANGELOG.md")
+}
+
+func TestValidateMissingREADME(t *testing.T) {
+	files := copyMap(validSkillFiles)
+	delete(files, "README.md")
+	res := defaultValidate(t, files)
+	assert.True(t, res.Valid)
+	assertWarnField(t, res, "README.md")
+}
+
+func TestValidateMissingLicense(t *testing.T) {
+	files := copyMap(validSkillFiles)
+	delete(files, "LICENSE")
+	res := defaultValidate(t, files)
+	assert.True(t, res.Valid)
+	assertWarnField(t, res, "LICENSE")
 }
 
 func TestValidateChangelogVPrefix(t *testing.T) {
 	files := copyMap(validSkillFiles)
 	files["CHANGELOG.md"] = "# Changelog\n\n## v1.2.3\n\n- added\n"
-	res, err := skill.NewValidator().Validate(context.Background(), writeSkillFixture(t, files))
+	dir := writeSkillFixture(t, files)
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "tests"), 0o755))
+	res, err := skill.NewValidator().Validate(context.Background(), dir)
 	require.NoError(t, err)
 	assert.True(t, res.Valid)
-	assert.Empty(t, res.Warnings)
+	assert.Empty(t, res.Warnings, "no warnings expected when changelog has v-prefix entry and all optional files present")
 }
 
 func TestValidateSkillYAMLMissingName(t *testing.T) {
 	files := copyMap(validSkillFiles)
-	files["skill.yaml"] = "version: \"1.2.3\"\ncompatible_with:\n  - claude-code\n"
-	res, err := skill.NewValidator().Validate(context.Background(), writeSkillFixture(t, files))
-	require.NoError(t, err)
+	files["skill.yaml"] = `version: "1.2.3"
+description: Does things
+compatible_with:
+  - claude-code
+`
+	res := defaultValidate(t, files)
 	assert.False(t, res.Valid)
-	assertErrorField(t, res, "skill.yaml")
+	assertErrorCode(t, res, "missing_name")
+}
+
+func TestValidateSkillYAMLMissingDescription(t *testing.T) {
+	files := copyMap(validSkillFiles)
+	files["skill.yaml"] = `name: my-skill
+version: "1.2.3"
+compatible_with:
+  - claude-code
+`
+	res := defaultValidate(t, files)
+	assert.False(t, res.Valid)
+	assertErrorCode(t, res, "missing_description")
+}
+
+func TestValidateEmptyCompatibleWith(t *testing.T) {
+	files := copyMap(validSkillFiles)
+	files["skill.yaml"] = `name: my-skill
+version: "1.2.3"
+description: Does things
+compatible_with: []
+`
+	res := defaultValidate(t, files)
+	assert.False(t, res.Valid)
+	assertErrorCode(t, res, "missing_compatible_with")
 }
 
 func TestValidateSkillYAMLParseError(t *testing.T) {
 	files := copyMap(validSkillFiles)
 	files["skill.yaml"] = "invalid: [yaml: {{"
-	res, err := skill.NewValidator().Validate(context.Background(), writeSkillFixture(t, files))
-	require.NoError(t, err)
+	res := defaultValidate(t, files)
 	assert.False(t, res.Valid)
-	assertErrorField(t, res, "skill.yaml")
+	assertErrorCode(t, res, "yaml_parse_error")
 }
 
-func TestValidateEmptyCompatibleWith(t *testing.T) {
+func TestValidateForbiddenFile(t *testing.T) {
 	files := copyMap(validSkillFiles)
-	files["skill.yaml"] = "name: my-skill\nversion: \"1.2.3\"\ncompatible_with: []\n"
-	res, err := skill.NewValidator().Validate(context.Background(), writeSkillFixture(t, files))
-	require.NoError(t, err)
+	files[".env"] = "SECRET=abc123"
+	res := defaultValidate(t, files)
 	assert.False(t, res.Valid)
-	assertErrorField(t, res, "skill.yaml")
+	assertErrorCode(t, res, "forbidden_file")
 }
 
-func TestValidateMissingDescription(t *testing.T) {
+func TestValidatePossibleSecret(t *testing.T) {
 	files := copyMap(validSkillFiles)
-	files["skill.yaml"] = "name: my-skill\nversion: \"1.2.3\"\ncompatible_with:\n  - claude-code\n"
-	res, err := skill.NewValidator().Validate(context.Background(), writeSkillFixture(t, files))
+	files["config.txt"] = "api_key=abcdef1234567890abcdef"
+	res := defaultValidate(t, files)
+	assert.False(t, res.Valid)
+	assertErrorCode(t, res, "possible_secret")
+}
+
+func TestValidatePrivateKey(t *testing.T) {
+	files := copyMap(validSkillFiles)
+	files["key.pem"] = "-----BEGIN RSA PRIVATE KEY-----\nfakekey\n-----END RSA PRIVATE KEY-----\n"
+	res := defaultValidate(t, files)
+	assert.False(t, res.Valid)
+}
+
+func TestValidateAbsolutePathWarningInDefault(t *testing.T) {
+	files := copyMap(validSkillFiles)
+	files["SKILL.md"] = "# My Skill\nSee /Users/john/docs for details."
+	res := defaultValidate(t, files)
+	// absolute path is a warning in default, not an error
+	assert.True(t, res.Valid)
+	assertWarnField(t, res, "SKILL.md")
+}
+
+func TestValidatePlatformNotCompatible(t *testing.T) {
+	files := copyMap(validSkillFiles)
+	res := validate(t, files, skill.ValidationOptions{Platform: "codex"})
+	assert.False(t, res.Valid)
+	assertErrorCode(t, res, "platform_not_compatible")
+}
+
+func TestValidatePlatformAll(t *testing.T) {
+	files := copyMap(validSkillFiles)
+	files["skill.yaml"] = `name: my-skill
+version: "1.2.3"
+description: Does things
+compatible_with:
+  - all
+`
+	res := validate(t, files, skill.ValidationOptions{Platform: "codex"})
+	assert.True(t, res.Valid)
+}
+
+// ── Strict validation ─────────────────────────────────────────────────────
+
+func TestStrictValidMissingChangelogFails(t *testing.T) {
+	files := copyMap(validSkillFiles)
+	delete(files, "CHANGELOG.md")
+	res := strictValidate(t, files)
+	assert.False(t, res.Valid)
+	assertErrorCode(t, res, "missing_changelog")
+}
+
+func TestStrictMissingChangelogEntryFails(t *testing.T) {
+	files := copyMap(validSkillFiles)
+	files["CHANGELOG.md"] = "# Changelog\n\n## 0.9.0\n\n- old release\n"
+	res := strictValidate(t, files)
+	assert.False(t, res.Valid)
+	assertErrorCode(t, res, "missing_changelog_entry")
+}
+
+func TestStrictMissingREADMEFails(t *testing.T) {
+	files := copyMap(validSkillFiles)
+	delete(files, "README.md")
+	res := strictValidate(t, files)
+	assert.False(t, res.Valid)
+	assertErrorCode(t, res, "missing_readme")
+}
+
+func TestStrictAbsolutePathFails(t *testing.T) {
+	files := copyMap(validSkillFiles)
+	files["SKILL.md"] = "# My Skill\nSee /Users/john/docs for details."
+	res := strictValidate(t, files)
+	assert.False(t, res.Valid)
+	assertErrorCode(t, res, "absolute_path")
+}
+
+func TestStrictGeneratedArtifactFails(t *testing.T) {
+	files := copyMap(validSkillFiles)
+	files["my-skill-1.2.3.zip"] = "fake zip content"
+	res := strictValidate(t, files)
+	assert.False(t, res.Valid)
+	assertErrorCode(t, res, "generated_artifact")
+}
+
+func TestStrictGeneratedManifestFails(t *testing.T) {
+	files := copyMap(validSkillFiles)
+	files["manifest.json"] = `{"name":"my-skill"}`
+	res := strictValidate(t, files)
+	assert.False(t, res.Valid)
+	assertErrorCode(t, res, "generated_artifact")
+}
+
+func TestStrictDuplicatePlatformFails(t *testing.T) {
+	files := copyMap(validSkillFiles)
+	files["skill.yaml"] = `name: my-skill
+version: "1.2.3"
+description: Does things
+compatible_with:
+  - claude-code
+  - claude-code
+`
+	res := strictValidate(t, files)
+	assert.False(t, res.Valid)
+	assertErrorCode(t, res, "duplicate_platform")
+}
+
+func TestStrictDuplicateTagFails(t *testing.T) {
+	files := copyMap(validSkillFiles)
+	files["skill.yaml"] = `name: my-skill
+version: "1.2.3"
+description: Does things
+compatible_with:
+  - claude-code
+tags:
+  - security
+  - security
+`
+	res := strictValidate(t, files)
+	assert.False(t, res.Valid)
+	assertErrorCode(t, res, "duplicate_tag")
+}
+
+func TestStrictUnknownYAMLFieldFails(t *testing.T) {
+	files := copyMap(validSkillFiles)
+	files["skill.yaml"] = `name: my-skill
+version: "1.2.3"
+description: Does things
+compatible_with:
+  - claude-code
+custom_thing: value
+`
+	res := strictValidate(t, files)
+	assert.False(t, res.Valid)
+	assertErrorCode(t, res, "unknown_field")
+}
+
+func TestStrictMissingTestsFailsWithoutFlag(t *testing.T) {
+	files := copyMap(validSkillFiles)
+	res := strictValidate(t, files)
+	assert.False(t, res.Valid)
+	assertErrorCode(t, res, "missing_tests")
+}
+
+func TestStrictMissingTestsAllowedWithFlag(t *testing.T) {
+	files := copyMap(validSkillFiles)
+	res := validate(t, files, skill.ValidationOptions{Strict: true, AllowMissingTests: true})
+	// missing tests is suppressed — should not be an error; check via Infos
+	for _, e := range res.Errors {
+		assert.NotEqual(t, "missing_tests", e.Code, "missing_tests should not appear as error with --allow-missing-tests")
+	}
+	for _, w := range res.Warnings {
+		assert.NotEqual(t, "missing_tests", w.Code, "missing_tests should not appear as warning with --allow-missing-tests")
+	}
+}
+
+func TestStrictBuildDirFails(t *testing.T) {
+	dir := writeSkillFixture(t, validSkillFiles)
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "node_modules", "pkg"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "node_modules", "pkg", "index.js"), []byte(""), 0o644))
+	res, err := skill.NewValidatorWithOptions(skill.ValidationOptions{Strict: true}).Validate(context.Background(), dir)
 	require.NoError(t, err)
 	assert.False(t, res.Valid)
-	assertErrorField(t, res, "skill.yaml")
+	assertErrorCode(t, res, "build_dir_present")
+}
+
+func TestStrictMissingLicenseFails(t *testing.T) {
+	files := copyMap(validSkillFiles)
+	delete(files, "LICENSE")
+	res := strictValidate(t, files)
+	assert.False(t, res.Valid)
+	assertErrorCode(t, res, "missing_license")
+}
+
+func TestStrictMissingLicenseAllowedWithFlag(t *testing.T) {
+	files := copyMap(validSkillFiles)
+	delete(files, "LICENSE")
+	res := validate(t, files, skill.ValidationOptions{Strict: true, AllowMissingLicense: true, AllowMissingTests: true})
+	for _, e := range res.Errors {
+		assert.NotEqual(t, "missing_license", e.Code)
+	}
+}
+
+func TestStrictProfile(t *testing.T) {
+	dir := writeSkillFixture(t, validSkillFiles)
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "tests"), 0o755))
+	res, err := skill.NewValidatorWithOptions(skill.ValidationOptions{Strict: true}).Validate(context.Background(), dir)
+	require.NoError(t, err)
+	assert.Equal(t, "strict", res.Profile)
+}
+
+// ── Publish validation ────────────────────────────────────────────────────
+
+func TestPublishValidSkill(t *testing.T) {
+	dir := writeSkillFixture(t, validSkillFiles)
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "tests"), 0o755))
+	res, err := skill.NewValidatorWithOptions(skill.ValidationOptions{Publish: true}).Validate(context.Background(), dir)
+	require.NoError(t, err)
+	assert.True(t, res.Valid)
+	assert.Equal(t, "publish", res.Profile)
+}
+
+func TestPublishMissingChangelogFails(t *testing.T) {
+	dir := writeSkillFixture(t, validSkillFiles)
+	require.NoError(t, os.RemoveAll(filepath.Join(dir, "CHANGELOG.md")))
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "tests"), 0o755))
+	res, err := skill.NewValidatorWithOptions(skill.ValidationOptions{Publish: true}).Validate(context.Background(), dir)
+	require.NoError(t, err)
+	assert.False(t, res.Valid)
+	assertErrorCode(t, res, "missing_changelog")
+}
+
+func TestPublishWarningsPromotedToErrors(t *testing.T) {
+	files := copyMap(validSkillFiles)
+	// No README — in default this is a warning, in publish it must become an error
+	delete(files, "README.md")
+	dir := writeSkillFixture(t, files)
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "tests"), 0o755))
+	res, err := skill.NewValidatorWithOptions(skill.ValidationOptions{Publish: true}).Validate(context.Background(), dir)
+	require.NoError(t, err)
+	assert.False(t, res.Valid)
+	assert.Empty(t, res.Warnings, "publish mode must have no warnings — all promoted to errors")
+	assertErrorCode(t, res, "missing_readme")
+}
+
+func TestPublishSecretFails(t *testing.T) {
+	files := copyMap(validSkillFiles)
+	files["config.txt"] = "token=supersecretvalue12345678"
+	dir := writeSkillFixture(t, files)
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "tests"), 0o755))
+	res, err := skill.NewValidatorWithOptions(skill.ValidationOptions{Publish: true}).Validate(context.Background(), dir)
+	require.NoError(t, err)
+	assert.False(t, res.Valid)
+	assertErrorCode(t, res, "possible_secret")
+}
+
+func TestPublishForbiddenFileFails(t *testing.T) {
+	files := copyMap(validSkillFiles)
+	files["id_rsa"] = "fake key"
+	res := publishValidate(t, files)
+	assert.False(t, res.Valid)
+	assertErrorCode(t, res, "forbidden_file")
+}
+
+func TestPublishPackageArtifactFails(t *testing.T) {
+	files := copyMap(validSkillFiles)
+	files["my-skill-1.2.3.zip"] = "fake zip"
+	res := publishValidate(t, files)
+	assert.False(t, res.Valid)
+	assertErrorCode(t, res, "generated_artifact")
+}
+
+func TestPublishInvalidNameFails(t *testing.T) {
+	files := copyMap(validSkillFiles)
+	files["skill.yaml"] = `name: My Skill With Spaces
+version: "1.2.3"
+description: Does things
+compatible_with:
+  - claude-code
+`
+	res := publishValidate(t, files)
+	assert.False(t, res.Valid)
+	assertErrorCode(t, res, "invalid_name")
+}
+
+func TestPublishMissingEntrypointFails(t *testing.T) {
+	files := copyMap(validSkillFiles)
+	files["skill.yaml"] = `name: my-skill
+version: "1.2.3"
+description: Does things
+compatible_with:
+  - claude-code
+entrypoint: CUSTOM.md
+`
+	res := publishValidate(t, files)
+	assert.False(t, res.Valid)
+	assertErrorCode(t, res, "missing_entrypoint")
+}
+
+// ── Lint (delegates to strict) ────────────────────────────────────────────
+
+func TestLintDelegatesToStrict(t *testing.T) {
+	files := copyMap(validSkillFiles)
+	delete(files, "CHANGELOG.md")
+	// In default, missing CHANGELOG is a warning; in strict it's an error.
+	// Lint must behave like strict.
+	dir := writeSkillFixture(t, files)
+	res, err := skill.NewValidatorWithOptions(skill.ValidationOptions{Strict: true}).Validate(context.Background(), dir)
+	require.NoError(t, err)
+	assert.False(t, res.Valid, "lint (strict) should fail on missing CHANGELOG")
+	assert.Equal(t, "strict", res.Profile)
+}
+
+func TestLintPlatformFlag(t *testing.T) {
+	files := copyMap(validSkillFiles)
+	// my-skill is compatible with claude-code and gitlab-duo but not codex
+	res := validate(t, files, skill.ValidationOptions{Strict: true, Platform: "codex"})
+	assert.False(t, res.Valid)
+	assertErrorCode(t, res, "platform_not_compatible")
+}
+
+func TestLintJSONOutput(t *testing.T) {
+	res := validate(t, validSkillFiles, skill.ValidationOptions{Strict: true})
+	// Verify the result is JSON-serializable with required fields
+	data, err := json.Marshal(res)
+	require.NoError(t, err)
+	var decoded map[string]interface{}
+	require.NoError(t, json.Unmarshal(data, &decoded))
+	assert.Contains(t, decoded, "valid")
+	assert.Contains(t, decoded, "profile")
+	assert.Contains(t, decoded, "path")
+}
+
+// ── Format helpers ────────────────────────────────────────────────────────
+
+func TestFormatNormalizePlatformAlias(t *testing.T) {
+	// NormalizePlatform should return canonical name for aliases
+	assert.Equal(t, skill.PlatformGitLabDuo, skill.NormalizePlatform("gitlab"))
+	assert.Equal(t, skill.PlatformGitLabDuo, skill.NormalizePlatform("duo"))
+	assert.Equal(t, skill.PlatformGitHubCopilot, skill.NormalizePlatform("github"))
+	assert.Equal(t, skill.PlatformGitHubCopilot, skill.NormalizePlatform("copilot"))
+	assert.Equal(t, skill.PlatformClaudeCode, skill.NormalizePlatform("claude"))
+}
+
+func TestFormatNormalizeCanonicalPassthrough(t *testing.T) {
+	assert.Equal(t, skill.PlatformClaudeCode, skill.NormalizePlatform(skill.PlatformClaudeCode))
+	assert.Equal(t, skill.PlatformAll, skill.NormalizePlatform(skill.PlatformAll))
 }
 
 // ── Packager tests ────────────────────────────────────────────────────────
 
 func TestPackageValidSkill(t *testing.T) {
 	dir := writeSkillFixture(t, validSkillFiles)
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "tests"), 0o755))
 	outDir := t.TempDir()
 	result, err := skill.NewPackager().Package(context.Background(), dir, outDir)
 	require.NoError(t, err)
@@ -217,6 +668,7 @@ func TestPackageInvalidSkill(t *testing.T) {
 
 func TestPackageOutputDefaultsToSkillDir(t *testing.T) {
 	dir := writeSkillFixture(t, validSkillFiles)
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "tests"), 0o755))
 	result, err := skill.NewPackager().Package(context.Background(), dir, "")
 	require.NoError(t, err)
 	assert.Equal(t, filepath.Join(dir, "my-skill-1.2.3.zip"), result.OutputPath)
@@ -224,6 +676,7 @@ func TestPackageOutputDefaultsToSkillDir(t *testing.T) {
 
 func TestPackageExcludesGitDir(t *testing.T) {
 	dir := writeSkillFixture(t, validSkillFiles)
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "tests"), 0o755))
 	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".git"), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, ".git", "HEAD"), []byte("ref: main"), 0o644))
 
@@ -240,10 +693,19 @@ func TestPackageExcludesGitDir(t *testing.T) {
 
 func TestPackageCreatesMissingOutputDir(t *testing.T) {
 	dir := writeSkillFixture(t, validSkillFiles)
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "tests"), 0o755))
 	outDir := filepath.Join(t.TempDir(), "dist")
 	result, err := skill.NewPackager().Package(context.Background(), dir, outDir)
 	require.NoError(t, err)
 	assert.FileExists(t, result.OutputPath)
+}
+
+func TestPackageUsesStrictValidation(t *testing.T) {
+	// Packager uses strict validation — a skill missing CHANGELOG fails package
+	files := copyMap(validSkillFiles)
+	delete(files, "CHANGELOG.md")
+	_, err := skill.NewPackager().Package(context.Background(), writeSkillFixture(t, files), t.TempDir())
+	require.Error(t, err, "packager with strict validation should fail without CHANGELOG.md")
 }
 
 func TestShouldSkip(t *testing.T) {
@@ -252,4 +714,74 @@ func TestShouldSkip(t *testing.T) {
 	assert.True(t, skill.ShouldSkip("file.tmp", "file.tmp"))
 	assert.True(t, skill.ShouldSkip("sub", ".git/sub"))
 	assert.False(t, skill.ShouldSkip("SKILL.md", "SKILL.md"))
+}
+
+// ── New platform constants ────────────────────────────────────────────────
+
+func TestNewPlatformsAreKnown(t *testing.T) {
+	for _, p := range []skill.Platform{
+		skill.PlatformCursor,
+		skill.PlatformWindsurf,
+		skill.PlatformOpenHands,
+		skill.PlatformOpenCode,
+		skill.PlatformOllama,
+		skill.PlatformGeneric,
+	} {
+		assert.True(t, skill.KnownPlatforms[p], "expected %q to be a known platform", p)
+	}
+}
+
+func TestNewPlatformsAcceptedInCompatibleWith(t *testing.T) {
+	for _, platform := range []string{"cursor", "windsurf", "openhands", "opencode", "ollama", "generic"} {
+		t.Run(platform, func(t *testing.T) {
+			files := copyMap(validSkillFiles)
+			files["skill.yaml"] = `name: my-skill
+version: "1.2.3"
+description: Does things
+compatible_with:
+  - ` + platform + "\n"
+			res := defaultValidate(t, files)
+			assert.True(t, res.Valid, "platform %q should be valid", platform)
+		})
+	}
+}
+
+// ── Result serialisation ──────────────────────────────────────────────────
+
+func TestValidationResultJSON(t *testing.T) {
+	files := copyMap(validSkillFiles)
+	files["VERSION"] = "1.5"
+	files["skill.yaml"] = `name: my-skill
+version: "1.5"
+description: Does things
+compatible_with:
+  - claude-code
+`
+	res := defaultValidate(t, files)
+	assert.False(t, res.Valid)
+
+	data, err := json.Marshal(res)
+	require.NoError(t, err)
+
+	var decoded map[string]interface{}
+	require.NoError(t, json.Unmarshal(data, &decoded))
+	assert.Equal(t, false, decoded["valid"])
+	assert.Equal(t, "default", decoded["profile"])
+
+	errs := decoded["errors"].([]interface{})
+	require.NotEmpty(t, errs)
+	first := errs[0].(map[string]interface{})
+	assert.Equal(t, "error", first["severity"])
+	assert.NotEmpty(t, first["code"])
+
+	// Verify bytes round-trip cleanly
+	var roundtrip skill.ValidationResult
+	require.NoError(t, json.Unmarshal(data, &roundtrip))
+	assert.Equal(t, res.Valid, roundtrip.Valid)
+	assert.Equal(t, res.Profile, roundtrip.Profile)
+
+	// Confirm no extra bytes leaked
+	var buf bytes.Buffer
+	require.NoError(t, json.Compact(&buf, data))
+	assert.True(t, buf.Len() > 0)
 }

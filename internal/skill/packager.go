@@ -29,7 +29,7 @@ type Packager struct {
 }
 
 func NewPackager() *Packager {
-	return &Packager{validator: NewValidator()}
+	return &Packager{validator: NewValidatorWithOptions(ValidationOptions{Strict: true})}
 }
 
 func (p *Packager) Package(ctx context.Context, dir, outputDir string) (*PackageResult, error) {

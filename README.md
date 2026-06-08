@@ -53,8 +53,13 @@ skpm install
 ### As a skill author
 
 ```bash
-skcr scaffold skill my-skill      # preferred scaffold owner
-skpm validate my-skill
+skcr scaffold skill my-skill        # preferred scaffold owner
+skpm validate my-skill              # default: useful during development
+skpm validate my-skill --strict     # strict: suitable for CI
+skpm validate my-skill --publish    # publish: release readiness check
+skpm lint my-skill                  # alias for validate --strict
+skpm format my-skill --check        # show what would be normalised
+skpm format my-skill --write        # apply normalisation
 skpm version bump patch my-skill
 skpm package my-skill
 skpm publish my-skill --source myregistry
@@ -133,6 +138,11 @@ skpm list
 skpm search <query>
 skpm info <skill>
 skpm validate [path]
+skpm validate [path] --strict
+skpm validate [path] --publish
+skpm lint [path]
+skpm format [path] --check
+skpm format [path] --write
 skpm package [path]
 skpm publish [path]
 skpm verify
@@ -390,27 +400,120 @@ search, info, and version listing.
 
 ### `skpm validate [path]`
 
-Validates a skill directory structure. Default path is the current directory.
+Validates a canonical skill source directory. Default path is the current directory.
 
 ```bash
 skpm validate ./skills/gitlab-policy-reviewer
 skpm validate ./skills/gitlab-policy-reviewer --strict
 skpm validate ./skills/gitlab-policy-reviewer --publish
 skpm validate ./skills/gitlab-policy-reviewer --platform codex
-skpm validate --output json
+skpm validate ./skills/gitlab-policy-reviewer --output json
 ```
 
-Checks:
+Three validation profiles:
+
+| Profile | Flag | Purpose |
+| --- | --- | --- |
+| default | _(none)_ | Local development. Optional files produce warnings. |
+| strict | `--strict` | CI-grade. Warnings become errors; stricter structural checks. |
+| publish | `--publish` | Release-grade. All strict checks plus publish-readiness requirements. |
+
+**Default** checks:
 
 - `SKILL.md` exists and is non-empty
-- `VERSION` contains a stable SemVer string such as `1.2.3`
-- `skill.yaml` has required fields (`name`, `version`, `compatible_with`); `version` matches `VERSION`
-- `compatible_with` values are recognized platform names
-- `CHANGELOG.md` contains an entry for the current version (warning if missing)
-- forbidden files, large files, obvious secret leakage, and unsafe absolute paths
+- `VERSION` contains a stable SemVer string (`MAJOR.MINOR.PATCH`)
+- `skill.yaml` parses and has required fields (`name`, `version`, `description`, `compatible_with`)
+- `skill.yaml.version` matches `VERSION`
+- `compatible_with` values are known canonical platform names
+- warns on missing `CHANGELOG.md`, `README.md`, `LICENSE`, `tests/`
+- errors on forbidden files (`.env`, `id_rsa`, `id_ed25519`, `*.pem`, `*.key`)
+- errors on detected secrets and private key blocks
+- warns on absolute local paths (`/Users/…`, `/home/…`, `C:\…`)
 
-Exits `0` if valid, `1` if errors are found. Warnings do not fail the default
-check. `--strict` and `--publish` promote warnings to errors.
+**Strict** adds:
+
+- missing `CHANGELOG.md` and `README.md` are errors, not warnings
+- missing `LICENSE` and `tests/` are errors (unless `--allow-missing-license` / `--allow-missing-tests`)
+- absolute local paths are errors
+- duplicate platforms and duplicate tags are errors
+- unknown `skill.yaml` fields outside `metadata:` are errors
+- generated artifacts (`manifest.json`, `checksums.txt`, `*.zip`, `*.tgz`) must not be checked in
+- build/cache directories (`node_modules`, `.venv`, `dist`, `target`, `.cache`) must not be present
+
+**Publish** adds:
+
+- all strict checks
+- no warnings allowed — any remaining warning becomes an error
+- entrypoint file must exist (defaults to `SKILL.md`)
+- `skill.yaml.name` must follow naming rules (lowercase alphanumeric and hyphens)
+
+Additional flags:
+
+| Flag | Description |
+| --- | --- |
+| `--platform <name>` | Fail if the skill does not declare compatibility with this platform |
+| `--allow-prerelease` | Accept prerelease SemVer (`1.2.3-beta.1`) |
+| `--allow-missing-tests` | Downgrade missing `tests/` from error to info in strict/publish |
+| `--allow-missing-license` | Downgrade missing `LICENSE` from error to info in strict/publish |
+
+Canonical platform names: `claude-code`, `gitlab-duo`, `github-copilot`, `codex`, `cursor`, `windsurf`, `openhands`, `opencode`, `ollama`, `generic`, `all`
+
+Platform aliases are accepted in `compatible_with` and normalised by `skpm format`:
+`gitlab` → `gitlab-duo`, `github` → `github-copilot`, `claude` → `claude-code`
+
+Exits `0` if valid, `1` if errors are found.
+
+---
+
+### `skpm lint [path]`
+
+Convenience alias for `skpm validate --strict`. Suitable for CI pipelines.
+
+```bash
+skpm lint ./skills/gitlab-policy-reviewer
+skpm lint ./skills/gitlab-policy-reviewer --output json
+skpm lint ./skills/gitlab-policy-reviewer --platform codex
+```
+
+`skpm lint` delegates to the same validator as `skpm validate --strict`. There is
+no separate lint engine or separate lint configuration. Validation belongs to
+`skpm` because `skpm` owns the skill lifecycle; a separate `sklint` CLI would
+duplicate lifecycle rules and create drift.
+
+> `skcr` creates skill skeletons. `skpm` validates whether those skeletons are
+> lifecycle-ready.
+
+---
+
+### `skpm format [path]`
+
+Normalises skill metadata files without changing skill semantics.
+
+```bash
+skpm format ./skills/gitlab-policy-reviewer --check
+skpm format ./skills/gitlab-policy-reviewer --write
+```
+
+What `format` normalises:
+
+- Platform aliases in `compatible_with` → canonical names (`gitlab` → `gitlab-duo`)
+- Duplicate platforms in `compatible_with` removed
+- Duplicate tags in `tags` removed
+- Missing `entrypoint: SKILL.md` added to `skill.yaml`
+- Leading `v` removed from `VERSION` (`v1.2.3` → `1.2.3`)
+- Trailing newline ensured in `SKILL.md`, `CHANGELOG.md`, `README.md`, `LICENSE`
+
+What `format` does **not** do:
+
+- Bump or change versions
+- Rewrite `SKILL.md` content
+- Change changelog entries
+- Package or publish anything
+
+`--check` exits `1` if any changes would be made (useful in CI).
+`--write` applies changes in place.
+
+> Note: re-marshaling `skill.yaml` removes inline comments.
 
 ---
 
@@ -636,14 +739,18 @@ skpm init skill my-skill --output-dir ./skills
 
 ## Skill Structure
 
-A valid skill directory:
+Canonical skill layout:
 
 ```text
 my-skill/
-  SKILL.md        # Agent-readable capability definition
-  VERSION         # Semver string, e.g. "1.5.0"
-  skill.yaml      # Machine-readable metadata
-  CHANGELOG.md    # Version history (recommended)
+  SKILL.md        # Agent-readable capability definition (required)
+  VERSION         # SemVer string, e.g. "1.5.0" (required)
+  skill.yaml      # Machine-readable metadata (required)
+  CHANGELOG.md    # Version history (required for publish)
+  README.md       # Human documentation (recommended)
+  LICENSE         # License file (recommended)
+  tests/
+    README.md     # Test documentation (recommended)
 ```
 
 **`skill.yaml`:**
@@ -652,16 +759,43 @@ my-skill/
 name: gitlab-policy-reviewer
 version: 1.5.0
 description: Reviews GitLab security policy YAML and approval policies.
+namespace: platform-security
 owners:
   - platform-security
+license: MIT
+entrypoint: SKILL.md
+tags:
+  - security
+  - gitlab
 compatible_with:
   - claude-code
   - gitlab-duo
   - github-copilot
   - codex
+security:
+  requires_network: false
+  requires_secrets: false
+  writes_files: false
+  runs_commands: false
 ```
 
 Use `all` in `compatible_with` to install to every supported platform path.
+
+**Supported platforms:**
+
+| Platform | Canonical name |
+| --- | --- |
+| Claude Code | `claude-code` |
+| GitLab Duo | `gitlab-duo` |
+| GitHub Copilot | `github-copilot` |
+| Codex | `codex` |
+| Cursor | `cursor` |
+| Windsurf | `windsurf` |
+| OpenHands | `openhands` |
+| OpenCode | `opencode` |
+| Ollama | `ollama` |
+| Generic | `generic` |
+| All platforms | `all` |
 
 ---
 
