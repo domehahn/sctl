@@ -16,11 +16,12 @@ import (
 
 func newPublishCmd() *cobra.Command {
 	var (
-		source    string
-		tagFormat string
-		noTag     bool
-		noPush    bool
-		outputDir string
+		source      string
+		tagFormat   string
+		noTag       bool
+		noPush      bool
+		outputDir   string
+		noChangelog bool
 	)
 
 	cmd := &cobra.Command{
@@ -58,6 +59,18 @@ Use --dry-run to preview all steps without making changes.`,
 			}
 			if src == "" {
 				return &UserError{Message: "no registry specified — use --source or set default_registry in config"}
+			}
+
+			// ── Pre-step: Changelog ────────────────────────────────────
+			if !noChangelog && !globalDryRun {
+				if version, err := skill.ReadVersion(dir); err == nil {
+					added, err := skill.EnsureChangelogEntry(dir, version)
+					if err != nil {
+						fmt.Fprintf(cmd.ErrOrStderr(), "  Warning: could not update CHANGELOG.md: %v\n", err)
+					} else if added {
+						fmt.Fprintf(cmd.OutOrStdout(), "  [pre]  Changelog  Added placeholder entry for %s — fill in CHANGELOG.md before merging\n", version)
+					}
+				}
 			}
 
 			// ── Step 1: Validate ───────────────────────────────────────
@@ -187,6 +200,7 @@ Use --dry-run to preview all steps without making changes.`,
 	cmd.Flags().BoolVar(&noTag, "no-tag", false, "Skip creating a git tag")
 	cmd.Flags().BoolVar(&noPush, "no-push", false, "Skip pushing the git tag")
 	cmd.Flags().StringVar(&outputDir, "output-dir", "", "Directory for the intermediate ZIP (default: temp dir)")
+	cmd.Flags().BoolVar(&noChangelog, "no-changelog", false, "Skip automatic CHANGELOG.md placeholder entry")
 	return cmd
 }
 

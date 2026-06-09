@@ -867,3 +867,65 @@ func TestPackageChecksumsRoundtrip(t *testing.T) {
 		assert.Len(t, e.SHA256, 64)
 	}
 }
+
+// ── EnsureChangelogEntry ─────────────────────────────────────────────────────
+
+func TestEnsureChangelogEntry_AddsEntryWhenMissing(t *testing.T) {
+	dir := writeSkillFixture(t, map[string]string{
+		"VERSION": "1.2.0",
+		"CHANGELOG.md": "# Changelog\n\n## 1.1.0\n\n- previous release\n",
+	})
+	added, err := skill.EnsureChangelogEntry(dir, "1.2.0")
+	require.NoError(t, err)
+	assert.True(t, added)
+
+	data, _ := os.ReadFile(filepath.Join(dir, "CHANGELOG.md"))
+	content := string(data)
+	assert.Contains(t, content, "## 1.2.0")
+	assert.Contains(t, content, "## 1.1.0", "existing entry must be preserved")
+	idx120 := len(content) - len(content[len("# Changelog\n\n"):])
+	idx110 := indexOf(content, "## 1.1.0")
+	assert.Less(t, indexOf(content, "## 1.2.0"), idx110, "new entry should appear before 1.1.0")
+	_ = idx120
+}
+
+func TestEnsureChangelogEntry_NoOpWhenPresent(t *testing.T) {
+	dir := writeSkillFixture(t, map[string]string{
+		"VERSION": "1.2.0",
+		"CHANGELOG.md": "# Changelog\n\n## 1.2.0\n\n- this release\n",
+	})
+	added, err := skill.EnsureChangelogEntry(dir, "1.2.0")
+	require.NoError(t, err)
+	assert.False(t, added)
+}
+
+func TestEnsureChangelogEntry_CreatesMissingFile(t *testing.T) {
+	dir := t.TempDir()
+	added, err := skill.EnsureChangelogEntry(dir, "0.1.0")
+	require.NoError(t, err)
+	assert.True(t, added)
+	data, _ := os.ReadFile(filepath.Join(dir, "CHANGELOG.md"))
+	assert.Contains(t, string(data), "## 0.1.0")
+	assert.Contains(t, string(data), "# Changelog")
+}
+
+func TestEnsureChangelogEntry_AcceptsVPrefix(t *testing.T) {
+	dir := writeSkillFixture(t, map[string]string{
+		"VERSION": "2.0.0",
+		"CHANGELOG.md": "# Changelog\n\n## v2.0.0\n\n- with v prefix\n",
+	})
+	added, err := skill.EnsureChangelogEntry(dir, "2.0.0")
+	require.NoError(t, err)
+	assert.False(t, added, "v2.0.0 should match 2.0.0")
+}
+
+func indexOf(s, substr string) int {
+	idx := 0
+	for i := range s {
+		if i+len(substr) <= len(s) && s[i:i+len(substr)] == substr {
+			return idx
+		}
+		idx++
+	}
+	return -1
+}
