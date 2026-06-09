@@ -43,7 +43,7 @@ func newVerifyCmd() *cobra.Command {
 					errors = append(errors, fmt.Sprintf("%s: missing sha256", sl.Name))
 				}
 				for _, p := range sl.CompatibleWith {
-					if !skill.KnownPlatforms[p] {
+					if !skill.KnownPlatforms(p) {
 						errors = append(errors, fmt.Sprintf("%s: unknown platform %s", sl.Name, p))
 					}
 				}

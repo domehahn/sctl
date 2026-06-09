@@ -732,7 +732,7 @@ func TestNewPlatformsAreKnown(t *testing.T) {
 		skill.PlatformOllama,
 		skill.PlatformGeneric,
 	} {
-		assert.True(t, skill.KnownPlatforms[p], "expected %q to be a known platform", p)
+		assert.True(t, skill.KnownPlatforms(p), "expected %q to be a known platform", p)
 	}
 }
 

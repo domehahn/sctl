@@ -24,20 +24,10 @@ const (
 	PlatformAll           Platform = spec.PlatformAll
 )
 
-// KnownPlatforms is the canonical set of valid platform identifiers.
-// Kept for backward compatibility; use spec.IsKnownPlatform for new code.
-var KnownPlatforms = map[Platform]bool{
-	PlatformClaudeCode:    true,
-	PlatformGitLabDuo:     true,
-	PlatformGitHubCopilot: true,
-	PlatformCodex:         true,
-	PlatformCursor:        true,
-	PlatformWindsurf:      true,
-	PlatformOpenHands:     true,
-	PlatformOpenCode:      true,
-	PlatformOllama:        true,
-	PlatformGeneric:       true,
-	PlatformAll:           true,
+// KnownPlatforms reports whether p is a recognised platform identifier.
+// Delegates to spec.IsKnownPlatform so the list stays in sync with sklib.
+func KnownPlatforms(p Platform) bool {
+	return spec.IsKnownPlatform(string(p))
 }
 
 // NormalizePlatform normalizes a platform identifier using sklib/spec rules.
