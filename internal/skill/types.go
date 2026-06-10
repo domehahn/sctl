@@ -98,6 +98,8 @@ type SkillYAML struct {
 	Entrypoint     string            `yaml:"entrypoint,omitempty"`
 	Tags           []string          `yaml:"tags,omitempty"`
 	CompatibleWith []Platform        `yaml:"compatible_with"`
+	Requires       []string          `yaml:"requires,omitempty"`
+	Scripts        map[string]string `yaml:"scripts,omitempty"`
 	Security       *SkillSecurity    `yaml:"security,omitempty"`
 	Metadata       map[string]string `yaml:"metadata,omitempty"`
 }

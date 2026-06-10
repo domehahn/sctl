@@ -38,6 +38,7 @@ var (
 	ConfigSetScalar       = configSetScalar
 	SemverDelta           = semverDelta
 	IsWithinBase          = isWithinBase
+	ReadSkillScripts      = readSkillScripts
 )
 
 func TestConfig() *config.Config {
