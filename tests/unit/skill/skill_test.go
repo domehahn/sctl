@@ -30,7 +30,36 @@ func writeSkillFixture(t *testing.T, files map[string]string) string {
 }
 
 var validSkillFiles = map[string]string{
-	"SKILL.md":     "# My Skill\nDoes things.",
+	"SKILL.md": `---
+name: my-skill
+description: Does things
+version: "1.2.3"
+since: "2025-01-01"
+last_modified: "2026-06-10"
+authors:
+  - platform-engineering
+stability: stable
+min_platform_version:
+  codex: "unknown"
+deprecated_since:
+replaces:
+supersedes: []
+changelog:
+  - version: "1.2.3"
+    date: "2026-06-10"
+    change: "Initial release"
+---
+
+# My Skill
+
+Does things.
+
+## Changelog
+
+### 1.2.3 - 2026-06-10
+
+- Initial release.
+`,
 	"VERSION":      "1.2.3",
 	"CHANGELOG.md": "# Changelog\n\n## 1.2.3\n\n- Initial release\n",
 	"README.md":    "# My Skill\n",

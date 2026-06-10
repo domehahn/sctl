@@ -65,6 +65,8 @@ func (v *StructuredValidator) Validate(_ context.Context, dir string) (*Validati
 		res.addError("SKILL.md", "file is missing", "missing_skill_md")
 	} else if info.Size() == 0 {
 		res.addError("SKILL.md", "file is empty", "empty_skill_md")
+	} else {
+		v.validateSkillMD(dir, res)
 	}
 
 	version, versionOK := v.validateVersion(dir, res)
@@ -393,6 +395,38 @@ func (v *StructuredValidator) validateHygiene(dir string, res *ValidationResult)
 		}
 		return nil
 	})
+}
+
+var skillMDFrontmatterRe = regexp.MustCompile(`(?s)^---\n(.+?)\n---`)
+
+func (v *StructuredValidator) validateSkillMD(dir string, res *ValidationResult) {
+	data, err := os.ReadFile(filepath.Join(dir, "SKILL.md"))
+	if err != nil {
+		return
+	}
+	content := string(data)
+
+	// --- frontmatter presence ---
+	m := skillMDFrontmatterRe.FindStringSubmatch(content)
+	if m == nil {
+		v.strictWarn(res, "SKILL.md", "no YAML frontmatter found (expected --- block at top)", "skill_md_no_frontmatter")
+		return
+	}
+
+	var fm spec.SkillMDFrontmatter
+	if err := yaml.Unmarshal([]byte(m[1]), &fm); err != nil {
+		res.addError("SKILL.md", "frontmatter YAML parse error: "+err.Error(), "skill_md_frontmatter_parse_error")
+		return
+	}
+
+	for _, e := range spec.ValidateSkillMDFrontmatter(fm) {
+		v.strictWarn(res, "SKILL.md", e, "skill_md_"+strings.ToLower(strings.ReplaceAll(strings.Fields(e)[0], ":", "")))
+	}
+
+	// --- body ## Changelog section ---
+	if !strings.Contains(content, "\n## Changelog") && !strings.HasPrefix(content, "## Changelog") {
+		v.strictWarn(res, "SKILL.md", "missing '## Changelog' section in body", "skill_md_missing_changelog_section")
+	}
 }
 
 func (v *StructuredValidator) promoteWarnings(res *ValidationResult) {
