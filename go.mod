@@ -3,7 +3,7 @@ module github.com/domehahn/skpm/v2
 go 1.23.0
 
 require (
-	github.com/domehahn/sklib v0.2.0
+	github.com/domehahn/sklib v0.3.0
 	github.com/google/go-github/v60 v60.0.0
 	github.com/rs/zerolog v1.35.1
 	github.com/schollz/progressbar/v3 v3.14.4
@@ -16,7 +16,7 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 )
 
-require github.com/fsnotify/fsnotify v1.10.1 // indirect
+require github.com/fsnotify/fsnotify v1.10.1
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
@@ -27,7 +27,7 @@ require (
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.22 // indirect
 	github.com/mitchellh/colorstring v0.0.0-20190213212951-d06e56a500db // indirect
-	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/pmezard/go-difflib v1.0.0
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/spf13/pflag v1.0.9 // indirect
 	golang.org/x/sys v0.29.0 // indirect
