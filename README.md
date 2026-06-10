@@ -963,6 +963,143 @@ Reports cache artifact count and size, lockfile skill count, and per-platform-di
 
 ---
 
+### `skpm run`
+
+Execute a named script from the `scripts` section of `skill.yaml`.
+
+```bash
+skpm run test
+skpm run lint --dir ./my-skill
+skpm run build -- --verbose
+```
+
+Scripts are defined in `skill.yaml`:
+
+```yaml
+scripts:
+  test: skpm validate . && skpm lint .
+  build: skpm package .
+  lint: skpm lint .
+```
+
+Shell completion works for script names. `SKPM_SKILL_DIR` and `SKPM_SCRIPT` are set in the script's environment.
+
+---
+
+### `skpm watch`
+
+Watch skill files for changes and re-run a script automatically — tight feedback loop during authoring.
+
+```bash
+skpm watch test
+skpm watch lint --dir ./my-skill
+skpm watch validate --debounce 500ms
+skpm watch test --ext .md,.yaml
+```
+
+Runs the script once immediately on start, then again after each save. Press Ctrl+C to stop.
+
+---
+
+### `skpm release`
+
+Combined authoring pipeline: validate → bump version → update changelog → package → git tag → push → upload.
+
+```bash
+skpm release                            # patch bump, default registry
+skpm release --bump minor --message "add streaming support"
+skpm release --no-publish               # stop after packaging, skip git and registry
+skpm release --dry-run                  # preview all steps
+```
+
+Replaces the manual sequence of `skpm version bump patch` + `skpm changelog add` + `skpm publish`.
+
+---
+
+### `skpm hooks`
+
+Lifecycle hooks defined in `agent-skills.yaml` run automatically before and after key operations.
+
+```yaml
+# agent-skills.yaml
+hooks:
+  pre_install:  echo "installing..."
+  post_install: ./scripts/verify-checksums.sh
+  post_add:     git add agent-skills.yaml agent-skills.lock
+  pre_publish:  skpm validate .
+```
+
+Available hooks: `pre_add`, `post_add`, `pre_install`, `post_install`, `pre_update`, `post_update`, `pre_publish`, `post_publish`, `pre_release`, `post_release`.
+
+Pre-hooks that fail abort the operation. Post-hooks that fail print a warning and continue.
+
+```bash
+skpm hooks list          # show configured hooks
+skpm hooks run post_add  # trigger a hook manually
+```
+
+---
+
+### `skpm migrate`
+
+Upgrade project or skill files to the current spec version. Idempotent — safe to run on already-current files.
+
+```bash
+skpm migrate                         # upgrade agent-skills.yaml + agent-skills.lock
+skpm migrate --skill-dir ./my-skill  # upgrade skill.yaml + SKILL.md frontmatter
+skpm migrate --dry-run               # preview changes without writing
+```
+
+Migrations applied:
+- `agent-skills.yaml` / `agent-skills.lock` v0 → v1: sets `version: 1`
+- `skill.yaml`: adds missing `namespace: default`; renames `platforms` → `compatible_with`
+- `SKILL.md` frontmatter: adds `compatibility.spec_version: 1`
+
+---
+
+### `skpm template`
+
+Save skill directories as reusable scaffolding templates; apply them with `skpm template use`.
+
+```bash
+skpm template list                          # list saved templates
+skpm template add review ./my-review-skill  # snapshot skill dir as template
+skpm template show review                   # inspect template files
+skpm template use review my-new-review      # scaffold new skill from template
+skpm template remove review                 # delete template
+```
+
+Skill names in file content are replaced with `{{.Name}}` when saving; `use` substitutes the new skill name. Templates are stored in `~/.config/skpm/templates.yaml`.
+
+---
+
+### `skpm workspace`
+
+Manage a monorepo of multiple skills via `skpm-workspace.yaml` at the repository root. The workspace file is discovered by walking up from the current directory.
+
+```yaml
+# skpm-workspace.yaml
+version: 1
+skills:
+  - ./skill-a
+  - ./skill-b
+  - ./shared/review-skill
+```
+
+```bash
+skpm workspace init                        # create workspace file (auto-discovers skills)
+skpm workspace list                        # show all skills with versions and validity
+skpm workspace run test                    # run 'test' script in all skills
+skpm workspace run lint --skill ./skill-a  # run in selected skill only
+skpm workspace validate                    # validate all skills
+skpm workspace publish                     # publish all skills
+skpm workspace publish --changed           # publish only git-modified skills
+skpm workspace graph                       # dependency tree across workspace
+skpm workspace graph --format dot          # Graphviz DOT output
+```
+
+---
+
 ## Global Flags
 
 | Flag | Default | Description |

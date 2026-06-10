@@ -22,6 +22,12 @@ var (
 // ConfigErrorSlice is the exported type for []configError used in tests.
 type ConfigError = configError
 
+// Type exports for tests.
+type SkillTemplate = skillTemplate
+type TemplateRegistry = templateRegistry
+type GraphNode = graphNode
+type WorkspaceManifest = workspaceManifest
+
 // Exports for new commands — used by tests/unit/cli/new_commands_test.go.
 var (
 	HumanBytes            = humanBytes
@@ -44,6 +50,15 @@ var (
 	RenameYAMLKey         = renameYAMLKey
 	ReadWorkspace         = readWorkspace
 	FindWorkspaceFile     = findWorkspaceFile
+	WorkspaceDirs         = workspaceDirs
+	FilterChangedDirs     = filterChangedDirs
+	IsTemplateFile        = isTemplateFile
+	SortedTemplateNames   = sortedTemplateNames
+	ScriptNames           = scriptNames
+	RunProjectHook        = runProjectHook
+	MigrateSkillMD        = migrateSkillMD
+	MigrateSkillYAMLFile  = migrateSkillYAMLFile
+	ReadGraphNode         = readGraphNode
 )
 
 func TestConfig() *config.Config {

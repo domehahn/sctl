@@ -13,9 +13,9 @@ import (
 )
 
 type graphNode struct {
-	name     string
-	version  string
-	requires []string
+	Name     string
+	Version  string
+	Requires []string
 }
 
 func newGraphCmd() *cobra.Command {
@@ -171,7 +171,7 @@ func runSkillGraph(cmd *cobra.Command, dir, format string) error {
 	}
 
 	// BFS to resolve requires recursively from installed skill dirs (max depth 5).
-	all := map[string]graphNode{root.name: root}
+	all := map[string]graphNode{root.Name: root}
 	type entry struct {
 		node  graphNode
 		depth int
@@ -184,13 +184,13 @@ func runSkillGraph(cmd *cobra.Command, dir, format string) error {
 		if cur.depth >= 5 {
 			continue
 		}
-		for _, dep := range cur.node.requires {
+		for _, dep := range cur.node.Requires {
 			if _, seen := all[dep]; seen {
 				continue
 			}
 			depNode, depErr := resolveInstalledGraphNode(dep)
 			if depErr != nil {
-				depNode = graphNode{name: dep, version: "?"}
+				depNode = graphNode{Name: dep, Version: "?"}
 			}
 			all[dep] = depNode
 			queue = append(queue, entry{node: depNode, depth: cur.depth + 1})
@@ -203,13 +203,13 @@ func runSkillGraph(cmd *cobra.Command, dir, format string) error {
 		fmt.Fprintln(cmd.OutOrStdout(), `  graph [rankdir=LR];`)
 		fmt.Fprintln(cmd.OutOrStdout(), `  node [shape=box];`)
 		for _, n := range all {
-			label := n.name
-			if n.version != "" && n.version != "?" {
-				label += "@" + n.version
+			label := n.Name
+			if n.Version != "" && n.Version != "?" {
+				label += "@" + n.Version
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "  %q [label=%q];\n", n.name, label)
-			for _, dep := range n.requires {
-				fmt.Fprintf(cmd.OutOrStdout(), "  %q -> %q;\n", n.name, dep)
+			fmt.Fprintf(cmd.OutOrStdout(), "  %q [label=%q];\n", n.Name, label)
+			for _, dep := range n.Requires {
+				fmt.Fprintf(cmd.OutOrStdout(), "  %q -> %q;\n", n.Name, dep)
 			}
 		}
 		fmt.Fprintln(cmd.OutOrStdout(), "}")
@@ -221,15 +221,15 @@ func runSkillGraph(cmd *cobra.Command, dir, format string) error {
 }
 
 func printGraphTree(cmd *cobra.Command, n graphNode, all map[string]graphNode, prefix string, isRoot bool) {
-	label := n.name
-	if n.version != "" {
-		label += "@" + n.version
+	label := n.Name
+	if n.Version != "" {
+		label += "@" + n.Version
 	}
 	if isRoot {
 		fmt.Fprintln(cmd.OutOrStdout(), label)
 	}
-	for i, dep := range n.requires {
-		isLast := i == len(n.requires)-1
+	for i, dep := range n.Requires {
+		isLast := i == len(n.Requires)-1
 		branch := prefix + "├── "
 		childPrefix := prefix + "│   "
 		if isLast {
@@ -238,11 +238,11 @@ func printGraphTree(cmd *cobra.Command, n graphNode, all map[string]graphNode, p
 		}
 		depNode := all[dep]
 		depLabel := dep
-		if depNode.version != "" {
-			depLabel = dep + "@" + depNode.version
+		if depNode.Version != "" {
+			depLabel = dep + "@" + depNode.Version
 		}
 		fmt.Fprintf(cmd.OutOrStdout(), "%s%s\n", branch, depLabel)
-		if len(depNode.requires) > 0 {
+		if len(depNode.Requires) > 0 {
 			printGraphTree(cmd, depNode, all, childPrefix, false)
 		}
 	}
@@ -254,9 +254,9 @@ func readGraphNode(dir string) (graphNode, error) {
 		return graphNode{}, err
 	}
 	return graphNode{
-		name:     sy.Name,
-		version:  sy.Version,
-		requires: sy.Requires,
+		Name:     sy.Name,
+		Version:  sy.Version,
+		Requires: sy.Requires,
 	}, nil
 }
 
@@ -267,5 +267,5 @@ func resolveInstalledGraphNode(name string) (graphNode, error) {
 			return readGraphNode(dir)
 		}
 	}
-	return graphNode{name: name, version: "?"}, nil
+	return graphNode{Name: name, Version: "?"}, nil
 }

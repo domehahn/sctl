@@ -250,10 +250,9 @@ func migrateSkillYAMLFile(cmd *cobra.Command, path string, dry bool) (bool, erro
 	}
 
 	// Rename 'platforms' → 'compatible_with' if present (pre-v1 field name).
-	if v, ok := findYAMLScalar(&doc, "platforms"); ok {
+	if _, ok := findYAMLScalar(&doc, "platforms"); ok {
 		if _, alreadyHas := findYAMLScalar(&doc, "compatible_with"); !alreadyHas {
 			renameYAMLKey(&doc, "platforms", "compatible_with")
-			_ = v
 			changes = append(changes, "renamed platforms → compatible_with")
 		}
 	}
