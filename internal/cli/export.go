@@ -42,6 +42,8 @@ var (
 	LoadTemplateRegistry  = loadTemplateRegistry
 	SaveTemplateRegistry  = saveTemplateRegistry
 	RenameYAMLKey         = renameYAMLKey
+	ReadWorkspace         = readWorkspace
+	FindWorkspaceFile     = findWorkspaceFile
 )
 
 func TestConfig() *config.Config {

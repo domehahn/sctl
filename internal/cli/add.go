@@ -161,6 +161,8 @@ For skills without a release tag, use --ref to download from a branch or commit:
 				return &InternalError{Message: "write manifest", Cause: err}
 			}
 
+			_ = runProjectHook(cmd, "post_add")
+
 			if format == OutputJSON {
 				PrintResult(format, CommandResult{
 					Success: true,

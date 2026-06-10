@@ -53,6 +53,10 @@ versions from the registry, generates a new agent-skills.lock, and installs.`,
 				}
 			}
 
+			if err := runProjectHook(cmd, "pre_install"); err != nil {
+				return err
+			}
+
 			lf, err := resolveLockfile(cmd, lockPath, cfg)
 			if err != nil {
 				return err
@@ -121,6 +125,8 @@ versions from the registry, generates a new agent-skills.lock, and installs.`,
 				}
 				return nil
 			}
+
+			_ = runProjectHook(cmd, "post_install")
 
 			fmt.Fprintf(cmd.OutOrStdout(), "Installed %d skill(s)", total)
 			if len(result.FromCache) > 0 {

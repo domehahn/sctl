@@ -61,6 +61,11 @@ Use --dry-run to preview all steps without making changes.`,
 				return &UserError{Message: "no registry specified — use --source or set default_registry in config"}
 			}
 
+			// ── Lifecycle hook ────────────────────────────────────────
+			if err := runProjectHook(cmd, "pre_publish"); err != nil {
+				return err
+			}
+
 			// ── Pre-step: Changelog ────────────────────────────────────
 			if !noChangelog && !globalDryRun {
 				if version, err := skill.ReadVersion(dir); err == nil {
@@ -175,6 +180,8 @@ Use --dry-run to preview all steps without making changes.`,
 				})
 				return nil
 			}
+
+			_ = runProjectHook(cmd, "post_publish")
 
 			fmt.Fprintln(cmd.OutOrStdout())
 			if globalDryRun {

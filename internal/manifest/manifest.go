@@ -22,6 +22,7 @@ type ManifestFile struct {
 	DefaultRegistry string                    `yaml:"default_registry,omitempty"`
 	Registries      map[string]RegistryConfig `yaml:"registries,omitempty"`
 	Skills          []SkillEntry              `yaml:"skills"`
+	Hooks           map[string]string         `yaml:"hooks,omitempty"`
 	Metadata        map[string]string         `yaml:"metadata,omitempty"`
 }
 
