@@ -53,21 +53,26 @@ skpm install
 ### As a skill author
 
 ```bash
-skcr scaffold skill my-skill        # preferred scaffold owner
+# 1 — scaffold
+skpm create my-skill                # interactive scaffold with SKILL.md, skill.yaml, VERSION
+# or: skcr scaffold skill my-skill  (preferred when using the skcr bake workflow)
+
+# 2 — develop with live feedback
+skpm watch test --dir my-skill      # re-runs 'test' script on every save
+
+# 3 — validate and format
 skpm validate my-skill              # default: useful during development
-skpm validate my-skill --strict     # strict: suitable for CI
-skpm validate my-skill --publish    # publish: release readiness check
+skpm validate my-skill --publish    # release readiness check
 skpm lint my-skill                  # alias for validate --strict
-skpm format my-skill --check        # show what would be normalised
-skpm format my-skill --write        # apply normalisation
-skpm version bump patch my-skill
-skpm package my-skill
-skpm publish my-skill --source myregistry
+skpm format my-skill --write        # normalise SKILL.md and skill.yaml
+
+# 4 — release in one step
+skpm release my-skill --bump minor --message "add streaming support" --source myregistry
+# equivalent to: version bump + changelog add + package + git tag + push + publish
 ```
 
 `skpm init skill <name>` is still available as a compatibility wrapper, but
-new workflows should use `skcr scaffold skill <name>` and then use `skpm` for
-validation, versioning, packaging, publishing, installation, and updates.
+new workflows should use `skpm create <name>` or `skcr scaffold skill <name>`.
 
 ---
 
@@ -130,6 +135,7 @@ skpm init
 skpm config get <key>
 skpm config set <key> <value>
 skpm env
+skpm migrate                    # upgrade files to current spec version
 
 # Package management
 skpm add <skill>[@constraint]
@@ -148,13 +154,15 @@ skpm list
 skpm search <query>
 skpm info <skill>
 skpm why <skill>
+skpm graph                      # installation + dependency graph
 
 # Auth
 skpm login [registry] --token <token>
 skpm logout [registry]
 
 # Development workflow
-skpm create <name>
+skpm create <name>              # scaffold new skill
+skpm template list|add|remove|show|use
 skpm link [path]
 skpm unlink <name>
 skpm clone <skill>[@version]
@@ -164,7 +172,9 @@ skpm snapshot restore <name>
 skpm snapshot list
 skpm snapshot delete <name>
 
-# Authoring & publishing
+# Authoring loop
+skpm run <script>               # run a script from skill.yaml
+skpm watch <script>             # re-run on file change
 skpm validate [path]
 skpm lint [path]
 skpm format [path] --check|--write
@@ -175,10 +185,18 @@ skpm version bump patch|minor|major <path>
 skpm version set <version> <path>
 skpm package [path]
 skpm publish [path]
+skpm release [path]             # bump + changelog + package + publish in one step
 skpm verify
 skpm deprecate <skill>@<version> --reason <msg>
 skpm yank     <skill>@<version> --reason <msg>
 skpm unyank   <skill>@<version>
+
+# Monorepo
+skpm workspace init|list|run|validate|publish|graph
+
+# Lifecycle hooks (defined in agent-skills.yaml)
+skpm hooks list
+skpm hooks run <hook>
 
 # Ops & diagnostics
 skpm audit
@@ -188,6 +206,7 @@ skpm doctor
 skpm cache list
 skpm cache clean
 skpm registry list|show|add|remove|test|capabilities
+skpm completion bash|zsh|fish|powershell
 ```
 
 ### `skpm init`
@@ -1150,19 +1169,48 @@ skpm install
 ### Author and release a new skill
 
 ```bash
-skcr scaffold skill my-skill
-# edit skills/my-skill/SKILL.md
-skpm validate skills/my-skill
-skpm version bump patch skills/my-skill
-skpm package skills/my-skill
-skpm publish  skills/my-skill --source myregistry
-# → validates, packages, creates tag, pushes, uploads
+# scaffold
+skpm create my-skill
+cd my-skill
+
+# develop with live feedback
+skpm watch test         # re-runs 'test' script from skill.yaml on every save
+
+# release (validate + bump + changelog + package + tag + push + publish)
+skpm release --bump patch --message "fix null pointer on empty input" --source myregistry
 ```
 
-Compatibility fallback:
+Or step by step for more control:
 
 ```bash
-skpm init skill my-skill --output-dir ./skills
+skpm validate .
+skpm version bump patch .
+skpm changelog add "fix null pointer on empty input" .
+skpm package .
+skpm publish . --source myregistry
+```
+
+### Work on multiple skills in a monorepo
+
+```bash
+# one-time setup
+skpm workspace init          # discovers skills in subdirectories
+
+# daily workflow
+skpm workspace validate      # validate all skills
+skpm workspace run test      # run 'test' script in every skill
+skpm workspace run lint --skill ./my-skill  # run in one skill only
+
+# release only what changed
+skpm workspace publish --changed --source myregistry
+```
+
+### Local development with link
+
+```bash
+skpm link ./my-skill         # symlinks into platform dirs; edits take effect immediately
+skpm why my-skill            # confirms linked status
+skpm unlink my-skill         # restores registry version on next install
 ```
 
 ---
@@ -1202,6 +1250,11 @@ compatible_with:
   - gitlab-duo
   - github-copilot
   - codex
+requires:             # optional: other skills this skill depends on
+  - base-reviewer
+scripts:              # optional: runnable via skpm run / skpm watch
+  test: skpm validate . && skpm lint .
+  build: skpm package .
 security:
   requires_network: false
   requires_secrets: false
@@ -1337,11 +1390,13 @@ Installed skill directories are generated artifacts — excluded from Git. Both 
 
 ## CI Integration
 
+### Basic install
+
 ```yaml
 # .gitlab-ci.yml
 install-skills:
   script:
-    - skpm install --concurrency 8
+    - skpm install --frozen-lockfile --concurrency 8
   cache:
     key: skpm-$CI_COMMIT_REF_SLUG
     paths:
@@ -1351,10 +1406,48 @@ install-skills:
 ```yaml
 # .github/workflows/skills.yml
 - name: Install agent skills
-  run: skpm install
+  run: skpm install --frozen-lockfile
   env:
     SKPM_REGISTRY_TOKEN: ${{ secrets.SKILLS_REGISTRY_TOKEN }}
 ```
+
+### Cache / install layer separation
+
+Separate the network-bound download step from the install step to maximise cache hits:
+
+```yaml
+# .gitlab-ci.yml
+cache-skills:          # runs once; result cached across pipelines
+  stage: prepare
+  script: skpm fetch
+  cache:
+    key: skpm-lock-$CI_COMMIT_SHA
+    paths: [~/.cache/skpm/]
+
+build:                 # no network needed; always fast
+  stage: build
+  script: skpm install --frozen-lockfile
+  cache:
+    key: skpm-lock-$CI_COMMIT_SHA
+    paths: [~/.cache/skpm/]
+    policy: pull
+```
+
+### Post-install hook for verification
+
+```yaml
+# agent-skills.yaml
+hooks:
+  post_install: skpm audit && skpm integrity
+```
+
+### Audit in CI
+
+```bash
+skpm audit --output json | jq '.data.findings[] | select(.severity == "error")'
+```
+
+`skpm audit` exits with code 1 if any error-level findings exist.
 
 For JSON output in CI (e.g. to feed into jq):
 
