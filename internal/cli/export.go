@@ -39,6 +39,9 @@ var (
 	SemverDelta           = semverDelta
 	IsWithinBase          = isWithinBase
 	ReadSkillScripts      = readSkillScripts
+	LoadTemplateRegistry  = loadTemplateRegistry
+	SaveTemplateRegistry  = saveTemplateRegistry
+	RenameYAMLKey         = renameYAMLKey
 )
 
 func TestConfig() *config.Config {
