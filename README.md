@@ -125,41 +125,69 @@ skills:
 Command overview:
 
 ```text
+# Project setup
 skpm init
-skpm init skill <name>        # compatibility wrapper; prefer skcr scaffold skill
-skpm config
-skpm add <skill>@<constraint>
+skpm config get <key>
+skpm config set <key> <value>
+skpm env
+
+# Package management
+skpm add <skill>[@constraint]
 skpm remove <skill>
 skpm lock
+skpm fetch                      # warm cache without installing
 skpm install
 skpm update [skill]
 skpm outdated
+skpm pin
+skpm diff <skill>@<v1> <skill>@<v2>
+skpm prune                      # remove installed dirs not in lockfile
+
+# Discovery
 skpm list
 skpm search <query>
 skpm info <skill>
+skpm why <skill>
+
+# Auth
+skpm login [registry] --token <token>
+skpm logout [registry]
+
+# Development workflow
+skpm create <name>
+skpm link [path]
+skpm unlink <name>
+skpm clone <skill>[@version]
+skpm import <zipfile>
+skpm snapshot save [name]
+skpm snapshot restore <name>
+skpm snapshot list
+skpm snapshot delete <name>
+
+# Authoring & publishing
 skpm validate [path]
-skpm validate [path] --strict
-skpm validate [path] --publish
 skpm lint [path]
-skpm format [path] --check
-skpm format [path] --write
+skpm format [path] --check|--write
+skpm changelog show [path]
+skpm changelog add <message> [path]
+skpm version show <path>
+skpm version bump patch|minor|major <path>
+skpm version set <version> <path>
 skpm package [path]
 skpm publish [path]
 skpm verify
+skpm deprecate <skill>@<version> --reason <msg>
+skpm yank     <skill>@<version> --reason <msg>
+skpm unyank   <skill>@<version>
+
+# Ops & diagnostics
+skpm audit
+skpm integrity
+skpm stats
 skpm doctor
 skpm cache list
 skpm cache clean
-skpm version
-skpm version show <path>
-skpm version bump patch <path>
-skpm version bump minor <path>
-skpm version bump major <path>
-skpm version set <version> <path>
-skpm registry list
-skpm registry show <name>
-skpm registry add <name> --type <type>
-skpm registry test <name>
-skpm registry capabilities <name>
+skpm registry list|show|add|remove|test|capabilities
 ```
 
 ### `skpm init`
@@ -667,6 +695,271 @@ skpm registry login company-skillforge
 the package manager. Registries advertise capabilities, and commands degrade
 gracefully when a backend does not support search, publish, governance, or other
 optional operations.
+
+---
+
+### `skpm config get` / `skpm config set`
+
+Read or write top-level config values without opening the YAML file directly.
+
+```bash
+skpm config get default_registry
+skpm config get cache_dir
+skpm config set default_registry my-registry
+skpm config set cache_dir /tmp/skpm-cache
+skpm config set concurrency 8
+skpm config set log_level debug
+```
+
+Valid keys: `default_registry`, `cache_dir`, `log_level`, `concurrency`.
+
+---
+
+### `skpm env`
+
+Prints the resolved runtime environment — useful when debugging auth or path issues.
+
+```bash
+skpm env
+skpm env --output json
+```
+
+Shows config file path, cache directory, default registry, all configured registries with auth type and token status (masked), manifest and lockfile presence, and active development links.
+
+---
+
+### `skpm login` / `skpm logout`
+
+Save or remove auth tokens for registries in the config file.
+
+```bash
+skpm login my-registry --token ghp_xxxx   # store token
+skpm login my-registry                     # prompt interactively
+skpm logout my-registry                    # remove token
+skpm login                                 # uses default_registry
+```
+
+Prefer `auth.token_env` in config for CI — tokens in config files require care around secrets management.
+
+---
+
+### `skpm create`
+
+Scaffold a new publishable skill directory with all required files.
+
+```bash
+skpm create my-skill
+skpm create my-skill --description "Reviews YAML configs" --platform claude-code --license Apache-2.0
+skpm create my-skill --no-interactive     # use flags only, no prompts
+```
+
+Creates `SKILL.md`, `skill.yaml`, `VERSION` (0.1.0), and `CHANGELOG.md`. Run `skpm publish` when ready.
+
+---
+
+### `skpm link` / `skpm unlink`
+
+Link a local skill directory into the project for in-place development without publishing.
+
+```bash
+skpm link ./my-skill          # symlinks into all platform dirs
+skpm link ./my-skill --platform claude-code
+skpm unlink my-skill          # removes symlinks, restores from registry on next install
+```
+
+Linked skills are tracked in `.skpm-links.yaml`. Edits to the source directory are reflected immediately without re-publishing.
+
+---
+
+### `skpm clone`
+
+Download and extract a skill from the registry into a local directory for forking or inspection.
+
+```bash
+skpm clone my-skill               # latest version → ./my-skill/
+skpm clone my-skill@1.2.0
+skpm clone my-skill --dir my-fork
+```
+
+---
+
+### `skpm import`
+
+Install a skill from a local ZIP artifact without contacting a registry. Useful for air-gapped environments and CI artifact promotion.
+
+```bash
+skpm import dist/my-skill-1.2.0.zip
+skpm import artifact.zip --platform claude-code
+skpm import artifact.zip --no-lock     # skip updating agent-skills.lock
+```
+
+---
+
+### `skpm fetch`
+
+Download skill ZIPs into the local cache without installing. Designed for CI layer separation.
+
+```bash
+skpm fetch                        # all locked skills
+skpm fetch my-skill other-skill   # specific skills only
+```
+
+**Typical CI pattern:**
+
+```yaml
+cache-skills:          # runs once, result cached
+  script: skpm fetch
+  cache:
+    paths: [~/.cache/skpm/]
+
+build:                 # runs every time, no network needed
+  script: skpm install --frozen-lockfile
+```
+
+---
+
+### `skpm diff`
+
+Show a unified diff between two versions of a skill's SKILL.md.
+
+```bash
+skpm diff my-skill@1.0.0 my-skill@1.2.0
+skpm diff my-skill@1.0.0 my-skill@1.2.0 --source my-registry
+```
+
+---
+
+### `skpm pin`
+
+Replace version constraints in `agent-skills.yaml` with the exact versions currently in the lockfile.
+
+```bash
+skpm pin
+skpm pin --dry-run
+```
+
+---
+
+### `skpm audit`
+
+Check locked skills against the registry for yanked/deprecated versions and available updates.
+
+```bash
+skpm audit
+skpm audit --output json
+```
+
+| Icon | Meaning |
+| --- | --- |
+| `✗` | Version was yanked — stop using it |
+| `~` | Version is deprecated, or a major update is available |
+| `↑` | Minor or patch update available |
+| `✓` | Up to date |
+
+Exits with code 1 if any error-level findings exist — CI-friendly.
+
+---
+
+### `skpm integrity`
+
+Verify installed SKILL.md files match the cached ZIP artifacts.
+
+```bash
+skpm integrity
+skpm integrity --output json
+```
+
+| Status | Meaning |
+| --- | --- |
+| `ok` | Installed content matches the cached artifact |
+| `modified` | Content differs — possible manual edit or tampering |
+| `missing` | SKILL.md absent — run `skpm install` |
+| `unverifiable` | No cached artifact — run `skpm install` to cache |
+
+Exits with code 1 on `modified` or `missing`.
+
+---
+
+### `skpm prune`
+
+Remove installed skill directories that are not recorded in the lockfile.
+
+```bash
+skpm prune
+skpm prune --dry-run
+skpm prune --root custom/skills
+```
+
+---
+
+### `skpm snapshot`
+
+Save and restore lockfile snapshots for rollback.
+
+```bash
+skpm snapshot save              # timestamp name
+skpm snapshot save before-bump
+skpm snapshot restore before-bump
+skpm snapshot list
+skpm snapshot delete before-bump
+```
+
+`restore` automatically backs up the current lockfile as `pre-restore-<timestamp>` before overwriting.
+
+---
+
+### `skpm why`
+
+Explain why a skill is in the lockfile.
+
+```bash
+skpm why my-skill
+skpm why my-skill --output json
+```
+
+Shows manifest constraint, resolved version, registry source, SHA256, installation paths (with ✓/✗ per path), and whether the skill is linked locally.
+
+---
+
+### `skpm changelog`
+
+Manage a skill's `CHANGELOG.md`.
+
+```bash
+skpm changelog show ./my-skill           # last 3 entries
+skpm changelog show ./my-skill -n 1      # last entry only
+skpm changelog add "fix null pointer" ./my-skill
+skpm changelog add "fix null pointer" ./my-skill --version 1.2.1
+```
+
+`add` appends a bullet to the section for the current version (from `VERSION`) without bumping it.
+
+---
+
+### `skpm deprecate` / `skpm yank` / `skpm unyank`
+
+Manage the lifecycle of published skill versions in the registry.
+
+```bash
+skpm deprecate my-skill@1.0.0 --reason "use 2.x instead"
+skpm yank      my-skill@1.0.0 --reason "critical bug"
+skpm unyank    my-skill@1.0.0
+```
+
+Requires a registry that supports governance operations (`skpm registry capabilities <name>` shows `deprecate: true` / `yank: true`).
+
+---
+
+### `skpm stats`
+
+Show cache and installation statistics.
+
+```bash
+skpm stats
+skpm stats --output json
+```
+
+Reports cache artifact count and size, lockfile skill count, and per-platform-directory skill count and disk usage.
 
 ---
 

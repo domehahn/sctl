@@ -16,12 +16,121 @@ func newConfigCmd() *cobra.Command {
 		Short: "Manage skpm configuration",
 		Long: `Inspect and validate the skpm configuration file.
 
-  skpm config validate    — validate ~/.config/skpm/config.yaml
-  skpm config show        — print the resolved config (tokens masked)`,
+  skpm config validate         — validate ~/.config/skpm/config.yaml
+  skpm config show             — print the resolved config (tokens masked)
+  skpm config get <key>        — print a single top-level config value
+  skpm config set <key> value  — set a single top-level config value`,
 	}
 	cmd.AddCommand(newConfigValidateCmd())
 	cmd.AddCommand(newConfigShowCmd())
+	cmd.AddCommand(newConfigGetCmd())
+	cmd.AddCommand(newConfigSetCmd())
 	return cmd
+}
+
+var configScalarKeys = []string{"default_registry", "cache_dir", "log_level", "concurrency"}
+
+func newConfigGetCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:       "get <key>",
+		Short:     "Print a top-level config value",
+		ValidArgs: configScalarKeys,
+		Args:      cobra.MatchAll(cobra.ExactArgs(1), cobra.OnlyValidArgs),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			path, err := resolveConfigPath("")
+			if err != nil {
+				return &InternalError{Message: "resolve config path", Cause: err}
+			}
+			cfg, err := config.LoadFrom(path)
+			if err != nil {
+				return &InternalError{Message: "load config", Cause: err}
+			}
+			val := configGetScalar(cfg, args[0])
+			if outputFormat() == OutputJSON {
+				PrintResult(OutputJSON, CommandResult{Success: true, Command: "config get", Data: map[string]string{args[0]: val}})
+				return nil
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), val)
+			return nil
+		},
+	}
+}
+
+func newConfigSetCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:       "set <key> <value>",
+		Short:     "Set a top-level config value",
+		ValidArgs: configScalarKeys,
+		Args:      cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			key, value := args[0], args[1]
+			for _, k := range configScalarKeys {
+				if k == key {
+					goto valid
+				}
+			}
+			return &UserError{Message: fmt.Sprintf("unknown config key %q; valid keys: %s", key, stringsJoin(configScalarKeys, ", "))}
+		valid:
+			path, err := resolveConfigPath("")
+			if err != nil {
+				return &InternalError{Message: "resolve config path", Cause: err}
+			}
+			cfg, err := config.LoadFrom(path)
+			if err != nil && !os.IsNotExist(err) {
+				return &InternalError{Message: "load config", Cause: err}
+			}
+			if cfg == nil {
+				cfg = &config.Config{Registries: map[string]config.RegistryConfig{}}
+			}
+			if err := configSetScalar(cfg, key, value); err != nil {
+				return err
+			}
+			if globalDryRun {
+				fmt.Fprintf(cmd.OutOrStdout(), "Dry run: would set %s = %s in %s\n", key, value, path)
+				return nil
+			}
+			if err := writeConfig(path, cfg); err != nil {
+				return &InternalError{Message: "write config", Cause: err}
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "Set %s = %s\n", key, value)
+			return nil
+		},
+	}
+}
+
+func configGetScalar(cfg *config.Config, key string) string {
+	switch key {
+	case "default_registry":
+		return cfg.DefaultRegistry
+	case "cache_dir":
+		return cfg.CacheDir
+	case "log_level":
+		return cfg.LogLevel
+	case "concurrency":
+		return fmt.Sprintf("%d", cfg.Concurrency)
+	default:
+		return ""
+	}
+}
+
+func configSetScalar(cfg *config.Config, key, value string) error {
+	switch key {
+	case "default_registry":
+		cfg.DefaultRegistry = value
+	case "cache_dir":
+		cfg.CacheDir = value
+	case "log_level":
+		cfg.LogLevel = value
+	case "concurrency":
+		n := 0
+		if _, err := fmt.Sscanf(value, "%d", &n); err != nil || n < 1 {
+			return &UserError{Message: fmt.Sprintf("concurrency must be a positive integer, got %q", value)}
+		}
+		cfg.Concurrency = n
+	default:
+		return &UserError{Message: fmt.Sprintf("unknown config key %q", key)}
+	}
+	return nil
 }
 
 // ── skpm config validate ──────────────────────────────────────────────────
