@@ -13,7 +13,9 @@ import (
 )
 
 func newEnvCmd() *cobra.Command {
-	return &cobra.Command{
+	var exportMode bool
+
+	cmd := &cobra.Command{
 		Use:   "env",
 		Short: "Show the resolved skpm runtime environment",
 		Long: `Prints the active configuration: config file path, cache directory,
@@ -21,8 +23,16 @@ default registry, all configured registries with auth status, and
 the locations of the manifest and lockfile in the current directory.
 
 Useful for diagnosing auth problems, wrong cache paths, or misconfigured
-registries without having to inspect files manually.`,
+registries without having to inspect files manually.
+
+Use --export to print tokens as shell export statements for eval in CI:
+  eval $(skpm env --export)`,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// --export: print registry tokens as shell export statements.
+			if exportMode {
+				return envExport(cmd)
+			}
+
 			format := outputFormat()
 
 			cfgPath, _ := config.Path()
@@ -190,6 +200,60 @@ registries without having to inspect files manually.`,
 			return nil
 		},
 	}
+
+	cmd.Flags().BoolVar(&exportMode, "export", false, "Print registry tokens as shell export statements (for eval)")
+	return cmd
+}
+
+// envExport prints each registry token as a shell export statement suitable
+// for eval $(skpm env --export) in CI pipelines.
+func envExport(cmd *cobra.Command) error {
+	cfg, err := config.Load()
+	if err != nil {
+		return &InternalError{Message: "load config", Cause: err}
+	}
+
+	names := make([]string, 0, len(cfg.Registries))
+	for n := range cfg.Registries {
+		names = append(names, n)
+	}
+	sort.Strings(names)
+
+	count := 0
+	for _, n := range names {
+		rc := cfg.Registries[n]
+		tok := rc.Token
+		if tok == "" {
+			tok = rc.Auth.Token
+		}
+		if tok == "" && rc.Auth.TokenEnv != "" {
+			tok = os.Getenv(rc.Auth.TokenEnv)
+		}
+		if tok == "" {
+			continue
+		}
+		// Variable name: SKPM_TOKEN_<REGISTRY_NAME_UPPER> with non-alnum replaced by _.
+		varName := "SKPM_TOKEN_" + envVarSafe(n)
+		fmt.Fprintf(cmd.OutOrStdout(), "export %s=%q\n", varName, tok)
+		count++
+	}
+	if count == 0 {
+		fmt.Fprintln(cmd.OutOrStdout(), "# no registry tokens configured")
+	}
+	return nil
+}
+
+// envVarSafe converts a registry name to an uppercase shell-safe identifier.
+func envVarSafe(s string) string {
+	var b strings.Builder
+	for _, r := range strings.ToUpper(s) {
+		if (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+		} else {
+			b.WriteRune('_')
+		}
+	}
+	return b.String()
 }
 
 type fileStatus struct {
