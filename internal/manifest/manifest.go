@@ -11,9 +11,24 @@ import (
 )
 
 const DefaultFilename = "agent-skills.yaml"
+const OverrideFilename = ".skill-override.yaml"
 
 // RegistryConfig is aliased from sklib/spec for use in agent-skills.yaml.
 type RegistryConfig = spec.RegistryConfig
+
+// SkillOverride holds user customizations applied at install time without
+// modifying the original SKILL.md. The agent reads .skill-override.yaml
+// at runtime (e.g., via a Pi extension) to inject these values.
+type SkillOverride struct {
+	// Prepend is prepended to the skill's system prompt.
+	Prepend string `yaml:"prepend,omitempty"`
+	// Append is appended to the skill's system prompt.
+	Append string `yaml:"append,omitempty"`
+	// Env are environment variables to set when the skill is active.
+	// Values support "${VAR}" or "env:VAR" syntax for referencing
+	// the host environment at runtime.
+	Env map[string]string `yaml:"env,omitempty"`
+}
 
 // ManifestFile is the Go model for agent-skills.yaml.
 // Field layout matches schemas/agent-skills.schema.json from skillspec.
@@ -22,6 +37,7 @@ type ManifestFile struct {
 	DefaultRegistry string                    `yaml:"default_registry,omitempty"`
 	Registries      map[string]RegistryConfig `yaml:"registries,omitempty"`
 	Skills          []SkillEntry              `yaml:"skills"`
+	Overrides       map[string]SkillOverride  `yaml:"overrides,omitempty"`
 	Hooks           map[string]string         `yaml:"hooks,omitempty"`
 	Metadata        map[string]string         `yaml:"metadata,omitempty"`
 }
@@ -93,4 +109,35 @@ func (m *ManifestFile) Remove(name string) bool {
 		}
 	}
 	return false
+}
+
+// OverrideFor returns the override configuration for a named skill, or nil if none exists.
+func (m *ManifestFile) OverrideFor(skillName string) *SkillOverride {
+	if m.Overrides == nil {
+		return nil
+	}
+	ov, ok := m.Overrides[skillName]
+	if !ok {
+		return nil
+	}
+	return &ov
+}
+
+// WriteOverride writes the .skill-override.yaml file to the given directory.
+// If the override is empty (no prepend, append, env), the file is removed
+// instead to avoid clutter.
+func WriteOverride(dir string, ov *SkillOverride) error {
+	path := filepath.Join(dir, OverrideFilename)
+	if ov == nil || (ov.Prepend == "" && ov.Append == "" && len(ov.Env) == 0) {
+		os.Remove(path) // ignore error — stale file is harmless
+		return nil
+	}
+	data, err := yaml.Marshal(ov)
+	if err != nil {
+		return fmt.Errorf("marshal override: %w", err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		return fmt.Errorf("write override %s: %w", path, err)
+	}
+	return nil
 }
