@@ -17,11 +17,13 @@ type claudeCodePlatform struct{}
 type gitlabDuoPlatform struct{}
 type githubCopilotPlatform struct{}
 type codexPlatform struct{}
+type piPlatform struct{}
 
 func (claudeCodePlatform) Name() skill.Platform    { return skill.PlatformClaudeCode }
 func (gitlabDuoPlatform) Name() skill.Platform     { return skill.PlatformGitLabDuo }
 func (githubCopilotPlatform) Name() skill.Platform { return skill.PlatformGitHubCopilot }
 func (codexPlatform) Name() skill.Platform         { return skill.PlatformCodex }
+func (piPlatform) Name() skill.Platform              { return skill.PlatformPi }
 
 func (claudeCodePlatform) InstallPaths(skillName string) []string {
 	return []string{filepath.Join(".claude", "skills", skillName)}
@@ -42,11 +44,19 @@ func (codexPlatform) InstallPaths(skillName string) []string {
 	return []string{filepath.Join(".agents", "skills", skillName)}
 }
 
+func (piPlatform) InstallPaths(skillName string) []string {
+	return []string{
+		filepath.Join(".pi", "skills", skillName),
+		filepath.Join(".pi", "agent", "skills", skillName),
+	}
+}
+
 var knownPlatforms = map[skill.Platform]Platform{
 	skill.PlatformClaudeCode:    claudeCodePlatform{},
 	skill.PlatformGitLabDuo:     gitlabDuoPlatform{},
 	skill.PlatformGitHubCopilot: githubCopilotPlatform{},
 	skill.PlatformCodex:         codexPlatform{},
+	skill.PlatformPi:            piPlatform{},
 }
 
 // ResolvePaths returns the deduplicated set of filesystem paths for the given compatible_with list.
@@ -60,6 +70,7 @@ func ResolvePaths(skillName string, platforms []skill.Platform) ([]string, error
 				skill.PlatformGitLabDuo,
 				skill.PlatformGitHubCopilot,
 				skill.PlatformCodex,
+				skill.PlatformPi,
 			}
 			break
 		}

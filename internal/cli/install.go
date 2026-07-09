@@ -97,6 +97,12 @@ versions from the registry, generates a new agent-skills.lock, and installs.`,
 			if err != nil {
 				return &InternalError{Message: "install failed", Cause: err}
 			}
+			if !globalDryRun {
+				if err := writeOverrides(workDir, lf); err != nil {
+					log.Warn().Err(err).Msg("write skill overrides")
+				}
+			}
+
 			if prune && !globalDryRun {
 				if err := pruneInstallPaths(workDir, lf); err != nil {
 					return &InternalError{Message: "prune installed skills", Cause: err}
@@ -150,6 +156,34 @@ versions from the registry, generates a new agent-skills.lock, and installs.`,
 	cmd.Flags().StringVar(&platform, "platform", "", "Install only skills compatible with a platform")
 	cmd.Flags().StringVar(&target, "target", "", "Install into a target directory")
 	return cmd
+}
+
+// writeOverrides reads the manifest and writes .skill-override.yaml for each
+// installed skill directory that has user-configured overrides.
+func writeOverrides(workDir string, lf *lockfile.LockFile) error {
+	mf, err := manifest.Read(manifest.DefaultFilename)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil // no manifest, no overrides
+		}
+		return fmt.Errorf("read manifest for overrides: %w", err)
+	}
+	if len(mf.Overrides) == 0 {
+		return nil
+	}
+	for _, sl := range lf.Skills {
+		ov := mf.OverrideFor(sl.Name)
+		if ov == nil {
+			continue
+		}
+		for _, dest := range sl.InstalledTo {
+			absPath := filepath.Join(workDir, dest)
+			if err := manifest.WriteOverride(absPath, ov); err != nil {
+				return fmt.Errorf("override %s: %w", sl.Name, err)
+			}
+		}
+	}
+	return nil
 }
 
 func filterLockfileForPlatform(lf *lockfile.LockFile, platform string) {

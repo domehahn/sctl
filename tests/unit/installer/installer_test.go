@@ -112,7 +112,7 @@ func TestResolvePaths(t *testing.T) {
 		{
 			name:      "all expands to every platform",
 			platforms: []skill.Platform{skill.PlatformAll},
-			wantPaths: []string{".claude/skills/my-skill", "skills/my-skill", ".agents/skills/my-skill", ".github/skills/my-skill"},
+			wantPaths: []string{".claude/skills/my-skill", "skills/my-skill", ".agents/skills/my-skill", ".github/skills/my-skill", ".pi/skills/my-skill", ".pi/agent/skills/my-skill"},
 		},
 	}
 	for _, tc := range tests {
