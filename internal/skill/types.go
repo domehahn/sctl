@@ -20,6 +20,7 @@ const (
 	PlatformOpenHands     Platform = spec.PlatformOpenHands
 	PlatformOpenCode      Platform = spec.PlatformOpenCode
 	PlatformOllama        Platform = spec.PlatformOllama
+	PlatformPi            Platform = spec.PlatformPi
 	PlatformGeneric       Platform = spec.PlatformGeneric
 	PlatformAll           Platform = spec.PlatformAll
 )
