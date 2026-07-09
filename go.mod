@@ -37,4 +37,3 @@ require (
 	golang.org/x/time v0.7.0 // indirect
 )
 
-replace github.com/domehahn/sklib => ../sklib
