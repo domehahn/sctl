@@ -39,6 +39,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -236,6 +237,41 @@ func TestSkillForgeE2EPublishResolveDownload(t *testing.T) {
 	info, err := disc.Info(ctx, registry.SkillRef{Namespace: namespace, Name: pkgResult.Name})
 	require.NoError(t, err)
 	require.Equal(t, pkgResult.Version, info.LatestVersion)
+
+	// ── Attestation ──────────────────────────────────────────────────
+	// Exercises the mapping in generic_http.go's SkillForge defaults
+	// against SkillForge's real /artifacts/skill/.../attestations
+	// endpoints (skills are mirrored server-side as kind="skill"
+	// artifacts — see SkillForge's registry.mirrorSkillArtifact) — proof
+	// that skil attestations attach as first-class registry metadata, not
+	// just a documented convention.
+	att, ok := interface{}(reg).(registry.AttestationRegistry)
+	require.True(t, ok, "SkillForgeRegistry must implement registry.AttestationRegistry")
+	verRef := registry.SkillVersionRef{Namespace: namespace, Name: pkgResult.Name, Version: pkgResult.Version}
+	predicate, err := json.Marshal(map[string]any{
+		"version": 1,
+		"subject": map[string]string{"name": pkgResult.Name, "version": pkgResult.Version, "sha256": pkgResult.SHA256},
+		"producer": map[string]string{"name": "skil", "version": "e2e-test"},
+		"result":   map[string]any{"status": "pass", "verdict": "clear", "risk_score": 0},
+	})
+	require.NoError(t, err)
+	attRec, err := att.Attest(ctx, verRef, registry.AttestationRequest{
+		// SkillForge's attestation type is a closed enum
+		// (signature/scan/provenance/sbom), not a free-form predicate-type
+		// URI — "scan" is the closest fit for a skil scan/eval result and
+		// is also what internal/cli/attestation.go defaults --type to.
+		Type:      "scan",
+		Digest:    pkgResult.SHA256,
+		Predicate: predicate,
+	})
+	require.NoError(t, err, "attest against live SkillForge failed")
+	require.Equal(t, "scan", attRec.Type)
+	require.Equal(t, pkgResult.SHA256, attRec.Digest)
+
+	listed, err := att.ListAttestations(ctx, verRef)
+	require.NoError(t, err, "list attestations against live SkillForge failed")
+	require.Len(t, listed, 1)
+	require.Equal(t, pkgResult.SHA256, listed[0].Digest)
 
 	// ── Governance (Deprecate) ──────────────────────────────────────
 	gov, ok := interface{}(reg).(registry.GovernanceRegistry)

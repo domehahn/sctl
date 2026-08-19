@@ -2,6 +2,7 @@ package registry
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
@@ -128,6 +129,44 @@ type GovernanceRegistry interface {
 	Deprecate(ctx context.Context, ref SkillVersionRef, reason string) error
 	Yank(ctx context.Context, ref SkillVersionRef, reason string) error
 	Unyank(ctx context.Context, ref SkillVersionRef) error
+}
+
+// AttestationRequest carries a third-party attestation (e.g. a skil
+// Attestation produced by `skil attest --output attestation.json`) to attach
+// to a published skill version. Predicate is opaque to skpm — it's stored
+// and returned as-is by the registry, letting skil's evidence schema evolve
+// independently of skpm's registry client.
+type AttestationRequest struct {
+	// Type identifies the predicate's kind. What values are accepted is
+	// registry-specific — there is no universal predicate-type URI
+	// convention across backends here. SkillForge, for example, accepts a
+	// fixed set: "signature", "scan", "provenance", "sbom" (skpm's CLI
+	// defaults to "scan" for a skil evidence file — see
+	// internal/cli/attestation.go).
+	Type string `json:"type"`
+	// Digest is the sha256 of the artifact the attestation is about
+	// (normally the same digest skpm already computed when packaging).
+	Digest    string          `json:"digest"`
+	Predicate json.RawMessage `json:"predicate"`
+}
+
+// AttestationRecord is a stored attestation as returned by the registry.
+type AttestationRecord struct {
+	ID        int64           `json:"id,omitempty"`
+	Type      string          `json:"type"`
+	Digest    string          `json:"digest"`
+	Predicate json.RawMessage `json:"predicate,omitempty"`
+	CreatedBy string          `json:"created_by,omitempty"`
+	CreatedAt string          `json:"created_at,omitempty"`
+}
+
+// AttestationRegistry is an optional capability: a registry that can store
+// and return third-party attestations (skil scan/eval evidence, provenance,
+// signing records, ...) as first-class metadata attached to a published
+// skill version, addressable independently of the artifact bytes.
+type AttestationRegistry interface {
+	Attest(ctx context.Context, ref SkillVersionRef, req AttestationRequest) (*AttestationRecord, error)
+	ListAttestations(ctx context.Context, ref SkillVersionRef) ([]AttestationRecord, error)
 }
 
 func ParseSkillRef(raw, defaultNamespace string) SkillRef {

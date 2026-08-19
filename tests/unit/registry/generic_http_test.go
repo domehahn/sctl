@@ -393,6 +393,61 @@ func TestGenericHTTPUnyank(t *testing.T) {
 	assert.Contains(t, path, "unyank")
 }
 
+func TestGenericHTTPAttest(t *testing.T) {
+	var path, method string
+	var received registry.AttestationRequest
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path, method = r.URL.Path, r.Method
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&received))
+		w.WriteHeader(http.StatusCreated)
+		writeJSON(w, registry.AttestationRecord{ID: 7, Type: received.Type, Digest: received.Digest, CreatedBy: "alice"})
+	}))
+	defer srv.Close()
+
+	reg := genericHTTPReg(t, srv, map[string]string{
+		"attest": "/skills/{namespace}/{name}/versions/{version}/attestations",
+	})
+	rec, err := reg.Attest(context.Background(), registry.SkillVersionRef{Namespace: "default", Name: "skill", Version: "1.0.0"}, registry.AttestationRequest{
+		Type:      "scan",
+		Digest:    "deadbeef",
+		Predicate: json.RawMessage(`{"verdict":"clear"}`),
+	})
+	require.NoError(t, err)
+	assert.Equal(t, http.MethodPost, method)
+	assert.Contains(t, path, "attestations")
+	assert.Equal(t, "scan", received.Type)
+	assert.Equal(t, "deadbeef", received.Digest)
+	assert.Equal(t, int64(7), rec.ID)
+	assert.Equal(t, "alice", rec.CreatedBy)
+}
+
+func TestGenericHTTPAttestNoEndpoint(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }))
+	defer srv.Close()
+
+	reg := genericHTTPReg(t, srv, map[string]string{})
+	_, err := reg.Attest(context.Background(), registry.SkillVersionRef{Namespace: "default", Name: "skill", Version: "1.0.0"}, registry.AttestationRequest{Type: "scan", Digest: "x"})
+	require.Error(t, err)
+}
+
+func TestGenericHTTPListAttestations(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, http.MethodGet, r.Method)
+		writeJSON(w, map[string]any{"attestations": []registry.AttestationRecord{
+			{ID: 1, Type: "scan", Digest: "deadbeef", CreatedBy: "alice"},
+		}})
+	}))
+	defer srv.Close()
+
+	reg := genericHTTPReg(t, srv, map[string]string{
+		"attestations": "/skills/{namespace}/{name}/versions/{version}/attestations",
+	})
+	records, err := reg.ListAttestations(context.Background(), registry.SkillVersionRef{Namespace: "default", Name: "skill", Version: "1.0.0"})
+	require.NoError(t, err)
+	require.Len(t, records, 1)
+	assert.Equal(t, "deadbeef", records[0].Digest)
+}
+
 // ── SkillForge defaults ───────────────────────────────────────────────────
 
 func TestSkillForgeDefaultEndpoints(t *testing.T) {

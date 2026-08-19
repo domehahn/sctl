@@ -190,6 +190,8 @@ skpm verify
 skpm deprecate <skill>@<version> --reason <msg>
 skpm yank     <skill>@<version> --reason <msg>
 skpm unyank   <skill>@<version>
+skpm attest   <skill>@<version> --file attestation.json
+skpm attestations <skill>@<version>
 
 # Monorepo
 skpm workspace init|list|run|validate|publish|graph
@@ -979,6 +981,30 @@ skpm unyank    my-skill@1.0.0
 ```
 
 Requires a registry that supports governance operations (`skpm registry capabilities <name>` shows `deprecate: true` / `yank: true`).
+
+---
+
+### `skpm attest` / `skpm attestations`
+
+Attach a third-party attestation — most commonly the output of
+[`skil attest --output attestation.json`](https://github.com/domehahn/skil) —
+to an already-published skill version as first-class registry metadata,
+independent of the artifact bytes, and list what's attached.
+
+```bash
+skpm attest      my-skill@1.0.0 --file attestation.json
+skpm attest      my-skill@1.0.0 --file attestation.json --type provenance --digest <sha256>
+skpm attestations my-skill@1.0.0
+```
+
+`--digest` defaults to the attestation file's `subject.sha256` field (skil's
+attestation schema) if present. `--type` defaults to `scan`; accepted values
+are registry-specific — SkillForge accepts `signature`, `scan`,
+`provenance`, `sbom`. The attestation file's content is stored as an opaque
+predicate; skpm does not validate or interpret it.
+
+Requires a registry that implements attestation storage (SkillForge
+registries do, via its `/artifacts/skill/.../attestations` API).
 
 ---
 

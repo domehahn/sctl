@@ -64,6 +64,12 @@ func NewSkillForgeRegistry(name string, rc config.RegistryConfig) *GenericHTTPRe
 		"deprecate":    "/api/v1/skills/{namespace}/{name}/versions/{version}/deprecate",
 		"yank":         "/api/v1/skills/{namespace}/{name}/versions/{version}/yank",
 		"unyank":       "/api/v1/skills/{namespace}/{name}/versions/{version}/unyank",
+		// Skills are mirrored server-side as kind="skill" artifacts, whose
+		// generic attestation endpoints (type/digest/predicate) are what
+		// this maps to — see SkillForge's
+		// /artifacts/{kind}/{namespace}/{name}/versions/{version}/attestations.
+		"attest":       "/api/v1/artifacts/skill/{namespace}/{name}/versions/{version}/attestations",
+		"attestations": "/api/v1/artifacts/skill/{namespace}/{name}/versions/{version}/attestations",
 	}
 	for k, v := range defaults {
 		if rc.Endpoints[k] == "" {
@@ -109,6 +115,10 @@ func (r *GenericHTTPRegistry) Capabilities(ctx context.Context) (*RegistryCapabi
 		Unyank:            r.supports("unyank"),
 		SemVerConstraints: r.supports("semver_constraints"),
 		Checksums:         r.supports("checksums"),
+		// registryapi.RegistryCapabilities has no dedicated "attest" field
+		// yet; Provenance is the closest existing signal that this
+		// registry can hold attestation/provenance-style evidence records.
+		Provenance: r.supports("attest"),
 	}, nil
 }
 
@@ -292,6 +302,66 @@ func contentTypeForPackage(packageType string) string {
 	default:
 		return "application/zip"
 	}
+}
+
+// Attest attaches a third-party attestation (a skil Attestation, provenance
+// record, or similar) to a published skill version.
+func (r *GenericHTTPRegistry) Attest(ctx context.Context, ref SkillVersionRef, req AttestationRequest) (*AttestationRecord, error) {
+	endpoint := r.endpoints["attest"]
+	if endpoint == "" {
+		return nil, Unsupported(r.name, "attest", "configure endpoints.attest or use another registry")
+	}
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal attestation request: %w", err)
+	}
+	url := r.endpointURL(endpoint, r.values(SkillRef{Namespace: ref.Namespace, Name: ref.Name}, ref.Version, ""))
+	httpReq, err := r.newRequest(ctx, http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	resp, err := r.client.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("%s attest: %w", r.name, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("%s attest: HTTP %d: %s", r.name, resp.StatusCode, readErrorBody(resp))
+	}
+	var rec AttestationRecord
+	if err := json.NewDecoder(resp.Body).Decode(&rec); err != nil {
+		rec = AttestationRecord{Type: req.Type, Digest: req.Digest, Predicate: req.Predicate}
+	}
+	return &rec, nil
+}
+
+// ListAttestations returns the attestations attached to a published skill version.
+func (r *GenericHTTPRegistry) ListAttestations(ctx context.Context, ref SkillVersionRef) ([]AttestationRecord, error) {
+	endpoint := r.endpoints["attestations"]
+	if endpoint == "" {
+		return nil, Unsupported(r.name, "attestations", "configure endpoints.attestations or use another registry")
+	}
+	url := r.endpointURL(endpoint, r.values(SkillRef{Namespace: ref.Namespace, Name: ref.Name}, ref.Version, ""))
+	httpReq, err := r.newRequest(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := r.client.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("%s attestations: %w", r.name, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("%s attestations: HTTP %d: %s", r.name, resp.StatusCode, readErrorBody(resp))
+	}
+	var payload struct {
+		Attestations []AttestationRecord `json:"attestations"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return nil, fmt.Errorf("%s attestations decode: %w", r.name, err)
+	}
+	return payload.Attestations, nil
 }
 
 func (r *GenericHTTPRegistry) Deprecate(ctx context.Context, ref SkillVersionRef, reason string) error {
