@@ -1555,6 +1555,7 @@ internal/
   cache/              # SHA256-keyed disk cache
   installer/          # Download + atomic install + platform paths
   archive/            # The one hardened ZIP extractor every install/add/clone/import path uses
+  httpclient/         # The one bounded HTTP client (timeout, redirects, download-size cap) every network call uses
   progress/           # CI-aware progress bars
 testdata/             # Fixture skills for tests
 tests/unit/           # Unit test suite
@@ -1574,6 +1575,7 @@ Skills are supply-chain artifacts. `skpm` enforces:
 - **Zip-slip protection** — every extraction path (`skpm add`, `install`, `clone`, `import`, and GitHub/GitLab `--ref` downloads) goes through one hardened implementation, `internal/archive`: absolute paths, `..` traversal, and symlink entries are rejected outright rather than silently sanitized, and per-file/total decompressed-size and entry-count limits guard against zip bombs. See `internal/archive/zip.go`'s package doc for why there's exactly one extractor instead of several hand-rolled ones.
 - **Atomic writes** — installations are all-or-nothing; no partial state on failure
 - **Cache integrity** — cache keys are the artifact's SHA256; collisions are impossible
+- **Network hardening** — every HTTP call goes through `internal/httpclient`, not `http.DefaultClient` or a bare `&http.Client{}`: a bounded request timeout (5 minutes), a capped and scheme-restricted redirect policy (refuses a redirect to a non-HTTP(S) scheme), and a download-size cap (2GiB) enforced while copying/reading a response body, not after — a slow, hostile, or misconfigured server can't hang a command indefinitely or exhaust memory/disk via an unbounded response.
 
 For production use, sign your release artifacts and include the signature in your registry metadata. Never ship skills with `sha256: ""` in production lockfiles.
 

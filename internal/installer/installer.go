@@ -13,10 +13,15 @@ import (
 
 	"github.com/domehahn/skpm/v2/internal/archive"
 	"github.com/domehahn/skpm/v2/internal/cache"
+	"github.com/domehahn/skpm/v2/internal/httpclient"
 	"github.com/domehahn/skpm/v2/internal/lockfile"
 	"github.com/domehahn/skpm/v2/internal/registry"
 	"golang.org/x/sync/errgroup"
 )
+
+// sharedHTTPClient is used for lockfile-URL downloads (httpRegistry) — see
+// internal/httpclient's package doc for why this isn't http.DefaultClient.
+var sharedHTTPClient = httpclient.New()
 
 type Options struct {
 	DryRun      bool
@@ -192,7 +197,7 @@ func (u *httpRegistry) Download(ctx context.Context, artifact *registry.Resolved
 	if err != nil {
 		return err
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := sharedHTTPClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("download %s: %w", artifact.DownloadURL, err)
 	}
@@ -200,6 +205,6 @@ func (u *httpRegistry) Download(ctx context.Context, artifact *registry.Resolved
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("download %s: HTTP %d", artifact.DownloadURL, resp.StatusCode)
 	}
-	_, err = io.Copy(dest, resp.Body)
+	_, err = httpclient.CopyLimited(dest, resp.Body)
 	return err
 }

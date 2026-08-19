@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/domehahn/skpm/v2/internal/config"
+	"github.com/domehahn/skpm/v2/internal/httpclient"
 	gitlab "github.com/xanzy/go-gitlab"
 )
 
@@ -37,7 +38,7 @@ type GitLabRegistry struct {
 // NewGitLabRegistry creates a registry backed by GitLab Releases.
 // projectID is "namespace/project" or a numeric project ID.
 func NewGitLabRegistry(baseURL, projectID, token string) (*GitLabRegistry, error) {
-	opts := []gitlab.ClientOptionFunc{}
+	opts := []gitlab.ClientOptionFunc{gitlab.WithHTTPClient(httpclient.New())}
 	if baseURL != "" {
 		opts = append(opts, gitlab.WithBaseURL(baseURL))
 	}
@@ -119,7 +120,7 @@ func (r *GitLabRegistry) Download(ctx context.Context, artifact *ResolvedArtifac
 	if err != nil {
 		return err
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := sharedHTTPClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("gitlab: download %s: %w", artifact.DownloadURL, err)
 	}
@@ -127,7 +128,7 @@ func (r *GitLabRegistry) Download(ctx context.Context, artifact *ResolvedArtifac
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("gitlab: download %s: HTTP %d", artifact.DownloadURL, resp.StatusCode)
 	}
-	_, err = io.Copy(dest, resp.Body)
+	_, err = httpclient.CopyLimited(dest, resp.Body)
 	return err
 }
 
@@ -189,7 +190,7 @@ func (r *GitLabRegistry) uploadGenericPackage(ctx context.Context, pkgName, vers
 	req.Header.Set("PRIVATE-TOKEN", r.token)
 	req.Header.Set("Content-Type", "application/octet-stream")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := sharedHTTPClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("upload: %w", err)
 	}

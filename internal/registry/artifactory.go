@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/domehahn/skpm/v2/internal/config"
+	"github.com/domehahn/skpm/v2/internal/httpclient"
 	"golang.org/x/mod/semver"
 )
 
@@ -41,7 +42,7 @@ func NewArtifactoryRegistry(baseURL, repo, token string) *ArtifactoryRegistry {
 		baseURL:    strings.TrimRight(baseURL, "/"),
 		repo:       repo,
 		token:      token,
-		httpClient: &http.Client{},
+		httpClient: httpclient.New(),
 	}
 }
 
@@ -155,7 +156,7 @@ func (r *ArtifactoryRegistry) Download(ctx context.Context, artifact *ResolvedAr
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("artifactory: download HTTP %d", resp.StatusCode)
 	}
-	_, err = io.Copy(dest, resp.Body)
+	_, err = httpclient.CopyLimited(dest, resp.Body)
 	return err
 }
 
@@ -194,7 +195,7 @@ func (r *ArtifactoryRegistry) Publish(ctx context.Context, req PublishRequest) (
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(resp.Body)
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
 		return nil, fmt.Errorf("artifactory: upload HTTP %d: %s", resp.StatusCode, string(body))
 	}
 

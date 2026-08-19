@@ -8,8 +8,16 @@ import (
 	"strings"
 
 	"github.com/domehahn/sklib/registryapi"
+	"github.com/domehahn/skpm/v2/internal/httpclient"
 	"github.com/domehahn/skpm/v2/internal/skill"
 )
+
+// sharedHTTPClient is the package-wide default HTTP client for registry
+// backends that make ad-hoc requests (asset downloads, generic package
+// uploads) outside of a purpose-built API client like go-github/go-gitlab.
+// See internal/httpclient's package doc for why every such call goes
+// through a bounded client instead of http.DefaultClient.
+var sharedHTTPClient = httpclient.New()
 
 type SkillRef struct {
 	Namespace string `json:"namespace,omitempty" yaml:"namespace,omitempty"`

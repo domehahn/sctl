@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/domehahn/skpm/v2/internal/archive"
+	"github.com/domehahn/skpm/v2/internal/httpclient"
 )
 
 // DownloadRef downloads a skill directory at a specific git ref (branch, commit, tag)
@@ -41,7 +42,7 @@ func downloadGitHubRef(ctx context.Context, r *GitHubRegistry, skillName, ref, s
 		req.Header.Set("Authorization", "Bearer "+r.token)
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := sharedHTTPClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("github: download ref %s: %w", ref, err)
 	}
@@ -50,7 +51,7 @@ func downloadGitHubRef(ctx context.Context, r *GitHubRegistry, skillName, ref, s
 		return fmt.Errorf("github: download ref %s: HTTP %d", ref, resp.StatusCode)
 	}
 
-	data, err := io.ReadAll(resp.Body)
+	data, err := httpclient.ReadAllLimited(resp.Body)
 	if err != nil {
 		return fmt.Errorf("github: read archive: %w", err)
 	}
@@ -76,7 +77,7 @@ func downloadGitLabRef(ctx context.Context, r *GitLabRegistry, skillName, ref, s
 		req.Header.Set("PRIVATE-TOKEN", r.token)
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := sharedHTTPClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("gitlab: download ref %s: %w", ref, err)
 	}
@@ -85,7 +86,7 @@ func downloadGitLabRef(ctx context.Context, r *GitLabRegistry, skillName, ref, s
 		return fmt.Errorf("gitlab: download ref %s: HTTP %d", ref, resp.StatusCode)
 	}
 
-	data, err := io.ReadAll(resp.Body)
+	data, err := httpclient.ReadAllLimited(resp.Body)
 	if err != nil {
 		return fmt.Errorf("gitlab: read archive: %w", err)
 	}

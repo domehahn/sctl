@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/domehahn/skpm/v2/internal/config"
+	"github.com/domehahn/skpm/v2/internal/httpclient"
 )
 
 func init() {
@@ -45,7 +46,7 @@ func NewGenericHTTPRegistry(name string, rc config.RegistryConfig) *GenericHTTPR
 		headers:    rc.Headers,
 		endpoints:  rc.Endpoints,
 		staticCaps: rc.Capabilities,
-		client:     &http.Client{},
+		client:     httpclient.New(),
 	}
 }
 
@@ -169,7 +170,7 @@ func (r *GenericHTTPRegistry) Download(ctx context.Context, artifact *ResolvedAr
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("%s download: HTTP %d: %s", r.name, resp.StatusCode, readErrorBody(resp))
 	}
-	_, err = io.Copy(dest, resp.Body)
+	_, err = httpclient.CopyLimited(dest, resp.Body)
 	return err
 }
 

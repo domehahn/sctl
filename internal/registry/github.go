@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/domehahn/skpm/v2/internal/config"
+	"github.com/domehahn/skpm/v2/internal/httpclient"
 	"github.com/google/go-github/v60/github"
 	"golang.org/x/oauth2"
 )
@@ -47,10 +48,15 @@ func NewGitHubRegistry(repoSlug, token string) (*GitHubRegistry, error) {
 		return nil, fmt.Errorf("github registry: repoSlug must be owner/repo, got %q", repoSlug)
 	}
 
-	var httpClient *http.Client
+	httpClient := httpclient.New()
 	if token != "" {
 		ts := oauth2.StaticTokenSource(&oauth2.Token{AccessToken: token})
-		httpClient = oauth2.NewClient(context.Background(), ts)
+		ctx := context.WithValue(context.Background(), oauth2.HTTPClient, httpClient)
+		httpClient = oauth2.NewClient(ctx, ts)
+		// oauth2.NewClient carries over the base client's Transport but not
+		// its Timeout — set it again so token-authenticated requests stay
+		// bounded too.
+		httpClient.Timeout = httpclient.Timeout
 	}
 	return &GitHubRegistry{
 		client: github.NewClient(httpClient),
@@ -117,7 +123,7 @@ func (r *GitHubRegistry) Download(ctx context.Context, artifact *ResolvedArtifac
 	if err != nil {
 		return err
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := sharedHTTPClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("github: download %s: %w", artifact.DownloadURL, err)
 	}
@@ -125,7 +131,7 @@ func (r *GitHubRegistry) Download(ctx context.Context, artifact *ResolvedArtifac
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("github: download %s: HTTP %d", artifact.DownloadURL, resp.StatusCode)
 	}
-	_, err = io.Copy(dest, resp.Body)
+	_, err = httpclient.CopyLimited(dest, resp.Body)
 	return err
 }
 
