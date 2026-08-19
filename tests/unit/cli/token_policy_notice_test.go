@@ -169,7 +169,7 @@ func TestCheckPolicyMinVersions(t *testing.T) {
 		Version: 1,
 		Rules: cli.PolicyRules{
 			MinVersions: map[string]string{
-				"sec-scan": "3.0.0",  // installed 2.1.0 — violation
+				"sec-scan": "3.0.0", // installed 2.1.0 — violation
 				"old-tool": "0.2.0", // installed 0.3.0 — ok
 			},
 		},

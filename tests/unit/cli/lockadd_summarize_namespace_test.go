@@ -165,7 +165,7 @@ func TestSummarizeShowsStats(t *testing.T) {
 	require.NoError(t, root.Execute())
 
 	out := buf.String()
-	assert.Contains(t, out, "2")   // total skills
+	assert.Contains(t, out, "2") // total skills
 	assert.Contains(t, out, "1.0.0")
 	assert.Contains(t, out, "2.0.0")
 }

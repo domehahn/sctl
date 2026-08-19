@@ -901,7 +901,7 @@ func TestPackageChecksumsRoundtrip(t *testing.T) {
 
 func TestEnsureChangelogEntry_AddsEntryWhenMissing(t *testing.T) {
 	dir := writeSkillFixture(t, map[string]string{
-		"VERSION": "1.2.0",
+		"VERSION":      "1.2.0",
 		"CHANGELOG.md": "# Changelog\n\n## 1.1.0\n\n- previous release\n",
 	})
 	added, err := skill.EnsureChangelogEntry(dir, "1.2.0")
@@ -920,7 +920,7 @@ func TestEnsureChangelogEntry_AddsEntryWhenMissing(t *testing.T) {
 
 func TestEnsureChangelogEntry_NoOpWhenPresent(t *testing.T) {
 	dir := writeSkillFixture(t, map[string]string{
-		"VERSION": "1.2.0",
+		"VERSION":      "1.2.0",
 		"CHANGELOG.md": "# Changelog\n\n## 1.2.0\n\n- this release\n",
 	})
 	added, err := skill.EnsureChangelogEntry(dir, "1.2.0")
@@ -940,7 +940,7 @@ func TestEnsureChangelogEntry_CreatesMissingFile(t *testing.T) {
 
 func TestEnsureChangelogEntry_AcceptsVPrefix(t *testing.T) {
 	dir := writeSkillFixture(t, map[string]string{
-		"VERSION": "2.0.0",
+		"VERSION":      "2.0.0",
 		"CHANGELOG.md": "# Changelog\n\n## v2.0.0\n\n- with v prefix\n",
 	})
 	added, err := skill.EnsureChangelogEntry(dir, "2.0.0")

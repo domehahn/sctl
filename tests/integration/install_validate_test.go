@@ -41,11 +41,11 @@ func TestInstallAndValidate(t *testing.T) {
 
 	lf := lockfile.New()
 	lf.Upsert(lockfile.SkillLock{
-		Name:      "example-skill",
-		Version:   "1.0.0",
-		Source:    "http",
+		Name:        "example-skill",
+		Version:     "1.0.0",
+		Source:      "http",
 		DownloadURL: srv.skillURL(urlPath),
-		SHA256:    sha256sum,
+		SHA256:      sha256sum,
 		InstalledTo: []string{
 			".claude/skills/example-skill",
 			"skills/example-skill",

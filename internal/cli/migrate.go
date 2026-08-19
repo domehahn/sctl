@@ -15,7 +15,7 @@ const currentSpecVersion = 1
 
 func newMigrateCmd() *cobra.Command {
 	var (
-		dryRun  bool
+		dryRun   bool
 		skillDir string
 	)
 

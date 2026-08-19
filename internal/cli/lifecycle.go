@@ -103,7 +103,6 @@ func sameLockedSkills(a, b *lockfile.LockFile) bool {
 	return reflect.DeepEqual(aa, bb)
 }
 
-
 func sha256File(path string) (string, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -153,7 +152,6 @@ func platformsToStrings(platforms []skill.Platform) []string {
 	}
 	return out
 }
-
 
 func readZipFile(path, name string) ([]byte, error) {
 	r, err := zip.OpenReader(path)

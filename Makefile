@@ -2,7 +2,7 @@
 
 BINARY   := skpm
 DIST_DIR := dist
-MODULE   := github.com/domehahn/skpm
+MODULE   := github.com/domehahn/skpm/v2
 VERSION  ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS  := -ldflags "-X $(MODULE)/internal/cli.Version=$(VERSION) -s -w"
 INSTALL_DIR ?= $(shell gobin="$$(go env GOBIN)"; if [ -n "$$gobin" ]; then echo "$$gobin"; else echo "$$(go env GOPATH)/bin"; fi)

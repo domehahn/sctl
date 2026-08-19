@@ -123,11 +123,11 @@ func SbomCycloneDX(lf *lockfile.LockFile) (string, error) {
 		} `json:"tools"`
 	}
 	type bom struct {
-		BOMFormat    string      `json:"bomFormat"`
-		SpecVersion  string      `json:"specVersion"`
-		Version      int         `json:"version"`
-		Metadata     metadata    `json:"metadata"`
-		Components   []component `json:"components"`
+		BOMFormat   string      `json:"bomFormat"`
+		SpecVersion string      `json:"specVersion"`
+		Version     int         `json:"version"`
+		Metadata    metadata    `json:"metadata"`
+		Components  []component `json:"components"`
 	}
 
 	doc := bom{

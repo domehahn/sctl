@@ -9,9 +9,9 @@ import (
 )
 
 type repairIssue struct {
-	Skill  string `json:"skill"`
-	Issue  string `json:"issue"`
-	Fixed  bool   `json:"fixed,omitempty"`
+	Skill string `json:"skill"`
+	Issue string `json:"issue"`
+	Fixed bool   `json:"fixed,omitempty"`
 }
 
 func newRepairCmd() *cobra.Command {

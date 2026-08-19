@@ -32,7 +32,7 @@ Use --fail to exit with code 1 when any issue is found — suitable for CI.`,
 				lockPath = lockfile.DefaultFilename
 			}
 
-						var sections []reportSection
+			var sections []reportSection
 
 			// ── LOCKFILE ───────────────────────────────────────────────────────
 			{

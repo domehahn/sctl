@@ -22,9 +22,9 @@ builds:
       - arm64
     ldflags:
       - -s -w
-      - -X github.com/domehahn/sctl/internal/cli.Version={{.Version}}
-      - -X github.com/domehahn/sctl/internal/cli.Commit={{.Commit}}
-      - -X github.com/domehahn/sctl/internal/cli.Date={{.Date}}
+      - -X github.com/domehahn/skpm/v2/internal/cli.Version={{.Version}}
+      - -X github.com/domehahn/skpm/v2/internal/cli.Commit={{.Commit}}
+      - -X github.com/domehahn/skpm/v2/internal/cli.Date={{.Date}}
 
 archives:
   - id: skpm

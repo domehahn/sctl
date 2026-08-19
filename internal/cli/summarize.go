@@ -10,13 +10,13 @@ import (
 )
 
 type lockSummary struct {
-	TotalSkills     int            `json:"total_skills"`
-	UniqueSources   int            `json:"unique_sources"`
-	ProtectedCount  int            `json:"protected_count"`
-	SignedCount     int            `json:"signed_count"`
-	VersionDist     map[string]int `json:"version_distribution"`
-	OldestVersion   string         `json:"oldest_version,omitempty"`
-	NewestVersion   string         `json:"newest_version,omitempty"`
+	TotalSkills    int            `json:"total_skills"`
+	UniqueSources  int            `json:"unique_sources"`
+	ProtectedCount int            `json:"protected_count"`
+	SignedCount    int            `json:"signed_count"`
+	VersionDist    map[string]int `json:"version_distribution"`
+	OldestVersion  string         `json:"oldest_version,omitempty"`
+	NewestVersion  string         `json:"newest_version,omitempty"`
 }
 
 func newSummarizeCmd() *cobra.Command {
@@ -75,13 +75,13 @@ skill counts, and the version distribution (how many skills are at each version)
 			}
 
 			summary := lockSummary{
-				TotalSkills:   len(lf.Skills),
-				UniqueSources: len(sources),
+				TotalSkills:    len(lf.Skills),
+				UniqueSources:  len(sources),
 				ProtectedCount: protected,
-				SignedCount:   signed,
-				VersionDist:   versions,
-				OldestVersion: oldest,
-				NewestVersion: newest,
+				SignedCount:    signed,
+				VersionDist:    versions,
+				OldestVersion:  oldest,
+				NewestVersion:  newest,
 			}
 
 			if outputFormat() == OutputJSON {

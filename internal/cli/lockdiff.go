@@ -33,12 +33,12 @@ Useful for reviewing lockfile changes in pull requests without reading raw YAML.
 			}
 
 			type change struct {
-				kind        string // added, removed, updated
-				name        string
-				beforeVer   string
-				afterVer    string
-				beforeSHA   string
-				afterSHA    string
+				kind      string // added, removed, updated
+				name      string
+				beforeVer string
+				afterVer  string
+				beforeSHA string
+				afterSHA  string
 			}
 
 			beforeMap := make(map[string]lockfile.SkillLock, len(before.Skills))

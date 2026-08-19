@@ -249,8 +249,8 @@ func TestSkillForgeE2EPublishResolveDownload(t *testing.T) {
 	require.True(t, ok, "SkillForgeRegistry must implement registry.AttestationRegistry")
 	verRef := registry.SkillVersionRef{Namespace: namespace, Name: pkgResult.Name, Version: pkgResult.Version}
 	predicate, err := json.Marshal(map[string]any{
-		"version": 1,
-		"subject": map[string]string{"name": pkgResult.Name, "version": pkgResult.Version, "sha256": pkgResult.SHA256},
+		"version":  1,
+		"subject":  map[string]string{"name": pkgResult.Name, "version": pkgResult.Version, "sha256": pkgResult.SHA256},
 		"producer": map[string]string{"name": "skil", "version": "e2e-test"},
 		"result":   map[string]any{"status": "pass", "verdict": "clear", "risk_score": 0},
 	})

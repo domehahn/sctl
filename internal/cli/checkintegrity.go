@@ -14,10 +14,10 @@ import (
 )
 
 type integrityCheck struct {
-	Skill   string `json:"skill"`
-	Path    string `json:"path"`
-	Status  string `json:"status"`
-	Detail  string `json:"detail,omitempty"`
+	Skill  string `json:"skill"`
+	Path   string `json:"path"`
+	Status string `json:"status"`
+	Detail string `json:"detail,omitempty"`
 }
 
 func newCheckIntegrityCmd() *cobra.Command {

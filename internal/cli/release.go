@@ -13,14 +13,14 @@ import (
 
 func newReleaseCmd() *cobra.Command {
 	var (
-		bump        string
-		message     string
-		source      string
-		tagFormat   string
-		noTag       bool
-		noPush      bool
-		noPublish   bool
-		outputDir   string
+		bump      string
+		message   string
+		source    string
+		tagFormat string
+		noTag     bool
+		noPush    bool
+		noPublish bool
+		outputDir string
 	)
 
 	cmd := &cobra.Command{

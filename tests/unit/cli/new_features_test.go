@@ -262,7 +262,9 @@ func TestCICommandRegistered(t *testing.T) {
 
 func TestCICommandHasExpectedFlags(t *testing.T) {
 	root := cli.NewRootCmd()
-	var ciCmd interface{ Flags() interface{ Lookup(string) interface{} } }
+	var ciCmd interface {
+		Flags() interface{ Lookup(string) interface{} }
+	}
 	_ = ciCmd
 	for _, sub := range root.Commands() {
 		if sub.Use == "ci" {

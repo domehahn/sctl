@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"gopkg.in/yaml.v3"
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 )
 
 const defaultTrustFile = ".skpm-trust.yaml"

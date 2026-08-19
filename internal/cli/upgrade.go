@@ -46,10 +46,10 @@ or pass --install to do it automatically.`,
 			}
 
 			type candidate struct {
-				name      string
-				current   string
-				latest    string
-				source    string
+				name    string
+				current string
+				latest  string
+				source  string
 			}
 
 			var candidates []candidate

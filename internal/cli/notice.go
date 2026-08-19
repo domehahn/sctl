@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/domehahn/skpm/v2/internal/lockfile"
-	"gopkg.in/yaml.v3"
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 )
 
 const defaultNoticeFile = "NOTICE.md"

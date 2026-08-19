@@ -21,7 +21,7 @@ type configExportData struct {
 
 type exportedRegistry struct {
 	URL                string `yaml:"url,omitempty"`
-	InsecureSkipVerify bool `yaml:"insecure_skip_verify,omitempty"`
+	InsecureSkipVerify bool   `yaml:"insecure_skip_verify,omitempty"`
 	// Token is omitted by default; included when --show-tokens is set.
 	Token string `yaml:"token,omitempty"`
 	// TokenEnv is always exported so the recipient knows which env var to set.
