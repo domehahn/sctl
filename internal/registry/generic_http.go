@@ -119,7 +119,7 @@ func (r *GenericHTTPRegistry) Resolve(ctx context.Context, req ResolveRequest) (
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("%s resolve: HTTP %d", r.name, resp.StatusCode)
+		return nil, fmt.Errorf("%s resolve: HTTP %d: %s", r.name, resp.StatusCode, readErrorBody(resp))
 	}
 	var artifact ResolvedArtifact
 	if err := json.NewDecoder(resp.Body).Decode(&artifact); err != nil {
@@ -148,7 +148,7 @@ func (r *GenericHTTPRegistry) Download(ctx context.Context, artifact *ResolvedAr
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("%s download: HTTP %d", r.name, resp.StatusCode)
+		return fmt.Errorf("%s download: HTTP %d: %s", r.name, resp.StatusCode, readErrorBody(resp))
 	}
 	_, err = io.Copy(dest, resp.Body)
 	return err
@@ -169,7 +169,7 @@ func (r *GenericHTTPRegistry) Search(ctx context.Context, req SearchRequest) ([]
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("%s search: HTTP %d", r.name, resp.StatusCode)
+		return nil, fmt.Errorf("%s search: HTTP %d: %s", r.name, resp.StatusCode, readErrorBody(resp))
 	}
 	var payload struct {
 		Skills []SkillSearchResult `json:"skills"`
@@ -195,7 +195,7 @@ func (r *GenericHTTPRegistry) Info(ctx context.Context, ref SkillRef) (*SkillInf
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("%s info: HTTP %d", r.name, resp.StatusCode)
+		return nil, fmt.Errorf("%s info: HTTP %d: %s", r.name, resp.StatusCode, readErrorBody(resp))
 	}
 	var info SkillInfo
 	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
@@ -219,7 +219,7 @@ func (r *GenericHTTPRegistry) ListVersions(ctx context.Context, ref SkillRef) ([
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("%s versions: HTTP %d", r.name, resp.StatusCode)
+		return nil, fmt.Errorf("%s versions: HTTP %d: %s", r.name, resp.StatusCode, readErrorBody(resp))
 	}
 	var payload struct {
 		Versions []VersionInfo `json:"versions"`
@@ -253,13 +253,24 @@ func (r *GenericHTTPRegistry) Publish(ctx context.Context, req PublishRequest) (
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("%s publish: HTTP %d", r.name, resp.StatusCode)
+		return nil, fmt.Errorf("%s publish: HTTP %d: %s", r.name, resp.StatusCode, readErrorBody(resp))
 	}
 	var result PublishResult
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		result = PublishResult{Name: req.Manifest.Name, Version: req.Manifest.Version, SHA256: req.SHA256, Registry: r.name, Created: resp.StatusCode == http.StatusCreated}
 	}
 	return &result, nil
+}
+
+// readErrorBody returns a bounded snippet of a non-2xx response body for
+// error messages, so a registry's actual rejection reason (validation
+// error, auth failure, ...) is visible instead of just the status code.
+func readErrorBody(resp *http.Response) string {
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+	if len(body) == 0 {
+		return "(empty body)"
+	}
+	return strings.TrimSpace(string(body))
 }
 
 // contentTypeForPackage maps a skpm PackageType to its wire content type.
@@ -303,7 +314,7 @@ func (r *GenericHTTPRegistry) postGovernance(ctx context.Context, op string, ref
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("%s %s: HTTP %d", r.name, op, resp.StatusCode)
+		return fmt.Errorf("%s %s: HTTP %d: %s", r.name, op, resp.StatusCode, readErrorBody(resp))
 	}
 	return nil
 }

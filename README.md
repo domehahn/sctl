@@ -1473,6 +1473,11 @@ skpm install --output json | jq '.data.installed[]'
 make test                # go test ./tests/unit/...
 make test-integration    # go test -tags integration ./tests/integration/...
 make test-all            # go test ./tests/...
+
+# Cross-repo E2E contract test against a real SkillForge instance (not run
+# by the above — requires a local SkillForge checkout; see
+# tests/integration/skillforge_e2e_test.go for what it exercises):
+SKILLFORGE_REPO=/path/to/SkillForge go test -tags e2e ./tests/integration/... -run TestSkillForgeE2E -v
 make coverage            # coverage for ./internal/... exercised by ./tests/...
 make build               # → dist/skpm
 make lint                # requires golangci-lint
@@ -1495,7 +1500,9 @@ internal/
   progress/           # CI-aware progress bars
 testdata/             # Fixture skills for tests
 tests/unit/           # Unit test suite
-tests/integration/    # Integration test suite
+tests/integration/    # Integration test suite (in-process fake registry) +
+                      # cross-repo E2E contract test against a real
+                      # SkillForge instance (tag "e2e", opt-in)
 examples/             # Ready-to-use skill examples and CI templates
 ```
 

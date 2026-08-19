@@ -1,4 +1,4 @@
-.PHONY: build test test-integration test-all coverage lint clean install release-snapshot
+.PHONY: build test test-integration test-e2e-skillforge test-all coverage lint clean install release-snapshot
 
 BINARY   := skpm
 DIST_DIR := dist
@@ -18,6 +18,13 @@ test:
 
 test-integration:
 	go test -race -timeout 120s -tags integration $(INTEGRATION_TEST_PKGS)
+
+# Cross-repo E2E contract test against a real SkillForge instance. Not part
+# of test-all: it shells out to `go build` a SkillForge binary and needs a
+# local checkout (SKILLFORGE_REPO env var, or ../SkillForge as a sibling of
+# this repo). Skips itself if neither is found.
+test-e2e-skillforge:
+	go test -timeout 60s -tags e2e $(INTEGRATION_TEST_PKGS) -run TestSkillForgeE2E -v
 
 test-all:
 	go test -race -timeout 120s $(ALL_TEST_PKGS)
