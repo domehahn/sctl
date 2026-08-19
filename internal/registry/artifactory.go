@@ -1,11 +1,13 @@
 package registry
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"sort"
 	"strings"
 
@@ -145,6 +147,55 @@ func (r *ArtifactoryRegistry) Download(ctx context.Context, artifact *ResolvedAr
 	}
 	_, err = io.Copy(dest, resp.Body)
 	return err
+}
+
+func (r *ArtifactoryRegistry) Publish(ctx context.Context, req PublishRequest) (*PublishResult, error) {
+	name := req.Manifest.Name
+	version := req.Manifest.Version
+	assetName := fmt.Sprintf("%s-%s.zip", name, version)
+	uploadURL := fmt.Sprintf("%s/%s/%s/%s/%s", r.baseURL, r.repo, name, version, assetName)
+
+	f, err := os.Open(req.ArtifactPath)
+	if err != nil {
+		return nil, fmt.Errorf("open zip: %w", err)
+	}
+	defer f.Close()
+
+	data, err := io.ReadAll(f)
+	if err != nil {
+		return nil, err
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPut, uploadURL, bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+	httpReq.Header.Set("Content-Type", "application/zip")
+	if req.SHA256 != "" {
+		httpReq.Header.Set("X-Checksum-Sha256", req.SHA256)
+	}
+	if r.token != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+r.token)
+	}
+
+	resp, err := r.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("artifactory: upload: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("artifactory: upload HTTP %d: %s", resp.StatusCode, string(body))
+	}
+
+	return &PublishResult{
+		Name:        name,
+		Version:     version,
+		DownloadURL: uploadURL,
+		SHA256:      req.SHA256,
+		Registry:    r.name,
+		Created:     true,
+	}, nil
 }
 
 func (r *ArtifactoryRegistry) newRequest(ctx context.Context, method, url string) (*http.Request, error) {

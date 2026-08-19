@@ -171,3 +171,54 @@ func (r *LocalRegistry) Download(_ context.Context, artifact *ResolvedArtifact, 
 	_, err = io.Copy(dest, f)
 	return err
 }
+
+// Publish copies the artifact into baseDir/<name>/<version>/<name>-<version>.zip.
+func (r *LocalRegistry) Publish(_ context.Context, req PublishRequest) (*PublishResult, error) {
+	name := req.Manifest.Name
+	version := req.Manifest.Version
+	assetName := fmt.Sprintf("%s-%s.zip", name, version)
+	destDir := filepath.Join(r.baseDir, name, version)
+	destPath := filepath.Join(destDir, assetName)
+
+	if err := os.MkdirAll(destDir, 0o755); err != nil {
+		return nil, fmt.Errorf("local: create dir %s: %w", destDir, err)
+	}
+
+	if err := copyFile(req.ArtifactPath, destPath); err != nil {
+		return nil, fmt.Errorf("local: copy artifact: %w", err)
+	}
+
+	absPath, _ := filepath.Abs(destPath)
+	return &PublishResult{
+		Name:        name,
+		Version:     version,
+		DownloadURL: "file://" + absPath,
+		SHA256:      req.SHA256,
+		Registry:    r.name,
+		Created:     true,
+	}, nil
+}
+
+func copyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	tmp := dst + ".tmp"
+	out, err := os.Create(tmp)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(out, in); err != nil {
+		out.Close()
+		os.Remove(tmp)
+		return err
+	}
+	if err := out.Close(); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	return os.Rename(tmp, dst)
+}

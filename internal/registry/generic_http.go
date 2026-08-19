@@ -245,7 +245,7 @@ func (r *GenericHTTPRegistry) Publish(ctx context.Context, req PublishRequest) (
 	if err != nil {
 		return nil, err
 	}
-	httpReq.Header.Set("Content-Type", "application/zip")
+	httpReq.Header.Set("Content-Type", contentTypeForPackage(req.PackageType))
 	httpReq.Header.Set("X-SKPM-SHA256", req.SHA256)
 	resp, err := r.client.Do(httpReq)
 	if err != nil {
@@ -260,6 +260,18 @@ func (r *GenericHTTPRegistry) Publish(ctx context.Context, req PublishRequest) (
 		result = PublishResult{Name: req.Manifest.Name, Version: req.Manifest.Version, SHA256: req.SHA256, Registry: r.name, Created: resp.StatusCode == http.StatusCreated}
 	}
 	return &result, nil
+}
+
+// contentTypeForPackage maps a skpm PackageType to its wire content type.
+// Defaults to application/zip when unset or unrecognized, matching the
+// packager's default output format.
+func contentTypeForPackage(packageType string) string {
+	switch packageType {
+	case "tgz", "tar.gz":
+		return "application/gzip"
+	default:
+		return "application/zip"
+	}
 }
 
 func (r *GenericHTTPRegistry) Deprecate(ctx context.Context, ref SkillVersionRef, reason string) error {

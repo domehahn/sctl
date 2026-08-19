@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/google/go-github/v60/github"
@@ -114,4 +115,77 @@ func extractVersion(tag, name string) string {
 	tag = strings.TrimPrefix(tag, name+"-v")
 	tag = strings.TrimPrefix(tag, "v")
 	return tag
+}
+
+func (r *GitHubRegistry) Publish(ctx context.Context, req PublishRequest) (*PublishResult, error) {
+	name := req.Manifest.Name
+	version := req.Manifest.Version
+	tag := formatReleaseTag(name, version, req.TagFormat)
+
+	rel, err := r.getOrCreateRelease(ctx, tag, name, version, req.SHA256)
+	if err != nil {
+		return nil, err
+	}
+
+	assetName := fmt.Sprintf("%s-%s.zip", name, version)
+	downloadURL, err := r.uploadAsset(ctx, rel.GetID(), assetName, req.ArtifactPath)
+	if err != nil {
+		return nil, err
+	}
+
+	return &PublishResult{
+		Name:        name,
+		Version:     version,
+		DownloadURL: downloadURL,
+		SHA256:      req.SHA256,
+		Registry:    r.name,
+		Created:     true,
+	}, nil
+}
+
+func (r *GitHubRegistry) getOrCreateRelease(ctx context.Context, tag, name, version, sha256 string) (*github.RepositoryRelease, error) {
+	rel, resp, err := r.client.Repositories.GetReleaseByTag(ctx, r.org, r.repo, tag)
+	if err == nil {
+		return rel, nil
+	}
+	if resp == nil || resp.StatusCode != http.StatusNotFound {
+		return nil, fmt.Errorf("github: get release %s: %w", tag, err)
+	}
+
+	body := fmt.Sprintf("SHA256: `%s`\n\nAdd to `agent-skills.lock`:\n```yaml\n- name: %s\n  version: %s\n  source: github\n  sha256: %s\n```",
+		sha256, name, version, sha256)
+
+	rel, _, err = r.client.Repositories.CreateRelease(ctx, r.org, r.repo, &github.RepositoryRelease{
+		TagName: github.String(tag),
+		Name:    github.String(fmt.Sprintf("%s %s", name, version)),
+		Body:    github.String(body),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("github: create release %s: %w", tag, err)
+	}
+	return rel, nil
+}
+
+func (r *GitHubRegistry) uploadAsset(ctx context.Context, releaseID int64, assetName, zipPath string) (string, error) {
+	f, err := os.Open(zipPath)
+	if err != nil {
+		return "", fmt.Errorf("open zip: %w", err)
+	}
+	defer f.Close()
+
+	asset, _, err := r.client.Repositories.UploadReleaseAsset(ctx, r.org, r.repo, releaseID,
+		&github.UploadOptions{Name: assetName}, f)
+	if err != nil {
+		return "", fmt.Errorf("github: upload asset %s: %w", assetName, err)
+	}
+	return asset.GetBrowserDownloadURL(), nil
+}
+
+// formatReleaseTag is shared by the github and gitlab backends: "prefixed"
+// (the default) yields <name>/v<ver>, "plain" yields v<ver>.
+func formatReleaseTag(name, version, tagFormat string) string {
+	if tagFormat == "plain" {
+		return "v" + version
+	}
+	return name + "/v" + version
 }

@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/domehahn/skpm/v2/internal/config"
-	"github.com/domehahn/skpm/v2/internal/publisher"
+	"github.com/domehahn/skpm/v2/internal/registry"
 	"github.com/domehahn/skpm/v2/internal/skill"
 	"github.com/spf13/cobra"
 )
@@ -197,19 +197,31 @@ Use --dry-run to preview all steps without making changes.`,
 			}
 
 			printStep(cmd, stepFmt(7), "Uploading to", src)
-			pub, err := publisher.New(src, tagFormat, cfg)
+			reg, err := registry.New(src, cfg)
 			if err != nil {
-				return &UserError{Message: fmt.Sprintf("publisher: %v", err)}
+				return &UserError{Message: fmt.Sprintf("registry: %v", err)}
+			}
+			pub, ok := reg.(registry.PublishingRegistry)
+			if !ok {
+				return &UserError{Message: fmt.Sprintf("registry %q does not support publish", src)}
 			}
 
-			var pubResult *publisher.Result
+			var pubResult *registry.PublishResult
 			if !globalDryRun {
-				pubResult, err = pub.Publish(cmd.Context(), pkgResult.Name, pkgResult.Version, pkgResult.OutputPath, pkgResult.SHA256)
+				pubResult, err = pub.Publish(cmd.Context(), registry.PublishRequest{
+					ArtifactPath: pkgResult.OutputPath,
+					Manifest: skill.SkillManifest{
+						Name:    pkgResult.Name,
+						Version: pkgResult.Version,
+					},
+					SHA256:    pkgResult.SHA256,
+					TagFormat: tagFormat,
+				})
 				if err != nil {
 					return &InternalError{Message: "upload", Cause: err}
 				}
 			} else {
-				pubResult = &publisher.Result{DownloadURL: "(dry run)"}
+				pubResult = &registry.PublishResult{DownloadURL: "(dry run)"}
 			}
 			printOK(cmd, pubResult.DownloadURL)
 

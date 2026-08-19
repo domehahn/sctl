@@ -1489,8 +1489,7 @@ internal/
   manifest/           # agent-skills.yaml read/write
   lockfile/           # agent-skills.lock read/write
   skill/              # Types, validator, packager
-  registry/           # Registry backends + factory (download)
-  publisher/          # Publisher backends + factory (upload)
+  registry/           # Registry backends + factory (resolve, download, publish, governance)
   cache/              # SHA256-keyed disk cache
   installer/          # Download + atomic install + platform paths
   progress/           # CI-aware progress bars

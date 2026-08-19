@@ -80,6 +80,10 @@ type PublishRequest struct {
 	PackageType  string              `json:"package_type,omitempty"`
 	Force        bool                `json:"force,omitempty"`
 	DryRun       bool                `json:"dry_run,omitempty"`
+	// TagFormat controls the git-release tag shape backends derive their
+	// release/tag from: "prefixed" (<name>/v<ver>, the default) or "plain"
+	// (v<ver>). Only consulted by tag-based backends (github, gitlab).
+	TagFormat string `json:"tag_format,omitempty"`
 }
 
 type PublishResult struct {

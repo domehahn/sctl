@@ -168,6 +168,7 @@ func (v *StructuredValidator) validateSkillYAML(dir string, res *ValidationResul
 }
 
 // skillYAMLToSpec converts a SkillYAML to the spec.Skill type expected by sklib.
+// Entrypoint is normalized to the default ("SKILL.md") when omitted, matching spec semantics.
 func skillYAMLToSpec(sy *SkillYAML) spec.Skill {
 	return spec.Skill{
 		Name:           sy.Name,
@@ -176,7 +177,7 @@ func skillYAMLToSpec(sy *SkillYAML) spec.Skill {
 		Namespace:      sy.Namespace,
 		Owners:         sy.Owners,
 		License:        sy.License,
-		Entrypoint:     sy.Entrypoint,
+		Entrypoint:     spec.DefaultEntrypoint(sy.Entrypoint),
 		Tags:           sy.Tags,
 		CompatibleWith: sy.CompatibleWith,
 		Metadata:       sy.Metadata,

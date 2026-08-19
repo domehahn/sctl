@@ -294,6 +294,41 @@ func TestGenericHTTPPublish(t *testing.T) {
 	assert.Equal(t, "deadbeef", receivedSHA)
 }
 
+func TestGenericHTTPPublishContentTypeByPackageType(t *testing.T) {
+	cases := []struct {
+		packageType string
+		want        string
+	}{
+		{"", "application/zip"},
+		{"zip", "application/zip"},
+		{"tgz", "application/gzip"},
+		{"tar.gz", "application/gzip"},
+	}
+
+	for _, c := range cases {
+		var receivedContentType string
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			receivedContentType = r.Header.Get("Content-Type")
+			w.WriteHeader(http.StatusCreated)
+			writeJSON(w, registry.PublishResult{Name: "my-skill", Version: "1.0.0", Created: true})
+		}))
+
+		tmp := t.TempDir()
+		artifactPath := tmp + "/skill.zip"
+		require.NoError(t, writeFile(artifactPath, []byte("zip")))
+
+		reg := genericHTTPReg(t, srv, map[string]string{"publish": "/skills/{namespace}/{name}/versions/{version}"})
+		_, err := reg.Publish(context.Background(), registry.PublishRequest{
+			ArtifactPath: artifactPath,
+			Manifest:     skill.SkillManifest{Name: "my-skill", Version: "1.0.0"},
+			PackageType:  c.packageType,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, c.want, receivedContentType, "package_type=%q", c.packageType)
+		srv.Close()
+	}
+}
+
 func TestGenericHTTPPublishNoEndpoint(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
