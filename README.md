@@ -20,6 +20,24 @@ Agent skills are SKILL.md files that give coding assistants domain-specific know
 
 ---
 
+## Where skpm fits
+
+`skpm` is one of four separate, independently versioned repositories:
+
+| Repository | Owns |
+| --- | --- |
+| `skcr` | Authoring — scaffolding, project-file rendering, compiling a source descriptor into a target format |
+| **`skpm`** (this repo) | **Package/version lifecycle** — validate, package, publish, install, lock, update, multi-registry pull |
+| [`skil`](https://github.com/domehahn/skil) | Security and assurance — static/semantic analysis, capability verification, policy, evidence, attestation |
+| `SkillForge` | Registry server — artifact storage, the HTTP API `skpm` talks to, governance, no bundled package-manager CLI of its own |
+
+`skpm` doesn't scan skills for security issues — it calls that "the skil job." Its
+`attest`/`attestations` commands (see below) let a `skil attest`-produced evidence
+file be attached to a published version as registry metadata, without `skpm`
+re-implementing any detection logic itself.
+
+---
+
 ## Install
 
 ```bash
