@@ -261,6 +261,19 @@ Checks:
 - `github` registries have `url` in `owner/repo` format (not a full URL)
 - `artifactory` registries have `url` in `<base-url>#<repo-name>` format
 
+#### Adding a new registry backend
+
+`internal/registry` dispatches by a type-registration map
+(`registry.Register(typeName, factory)`), not a hardcoded switch. Each
+built-in backend registers itself in its own file's `init()` — see the
+bottom of `github.go`, `gitlab.go`, `artifactory.go`, `local.go`, and
+`generic_http.go`. To add a new type: implement `registry.Registry` (plus
+any of `DiscoveryRegistry`/`PublishingRegistry`/`GovernanceRegistry` it
+supports), then call `registry.Register("your-type", yourFactory)` from an
+`init()` in your new file — no other file needs to change, and both
+`skpm add`/pull and `skpm publish`/`release` pick it up automatically since
+they both resolve backends through the same `registry.New()`.
+
 #### `skpm config show`
 
 Prints the resolved config with all environment variable overrides applied. Tokens are masked as `***`.

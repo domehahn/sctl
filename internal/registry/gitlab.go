@@ -9,8 +9,22 @@ import (
 	"os"
 	"strings"
 
+	"github.com/domehahn/skpm/v2/internal/config"
 	gitlab "github.com/xanzy/go-gitlab"
 )
+
+func init() {
+	Register("gitlab", func(name string, rc config.RegistryConfig) (Registry, error) {
+		if rc.Project == "" {
+			return nil, fmt.Errorf("factory: gitlab registry %q requires project set to namespace/project (e.g. \"platform/agent-skills\")", name)
+		}
+		reg, err := NewGitLabRegistry(rc.URL, rc.Project, authToken(rc))
+		if err != nil {
+			return nil, err
+		}
+		return reg.WithName(name), nil
+	})
+}
 
 type GitLabRegistry struct {
 	client    *gitlab.Client

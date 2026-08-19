@@ -14,6 +14,15 @@ import (
 	"github.com/domehahn/skpm/v2/internal/config"
 )
 
+func init() {
+	Register("generic-http", func(name string, rc config.RegistryConfig) (Registry, error) {
+		return NewGenericHTTPRegistry(name, rc), nil
+	})
+	Register("skillforge", func(name string, rc config.RegistryConfig) (Registry, error) {
+		return NewSkillForgeRegistry(name, rc), nil
+	})
+}
+
 type GenericHTTPRegistry struct {
 	name       string
 	regType    string

@@ -9,8 +9,19 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/domehahn/skpm/v2/internal/config"
 	"golang.org/x/mod/semver"
 )
+
+func init() {
+	Register("local", func(name string, rc config.RegistryConfig) (Registry, error) {
+		path := rc.Path
+		if path == "" {
+			path = rc.URL
+		}
+		return NewLocalRegistry(path).WithName(name), nil
+	})
+}
 
 type LocalRegistry struct {
 	baseDir string

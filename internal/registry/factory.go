@@ -7,6 +7,30 @@ import (
 	"github.com/domehahn/skpm/v2/internal/config"
 )
 
+// BackendFactory constructs a named Registry adapter from its type-specific
+// config.RegistryConfig. Each built-in backend registers its own factory via
+// Register() in an init() in its own file (see github.go, gitlab.go,
+// artifactory.go, local.go, generic_http.go) — adding a new registry type
+// means implementing Registry and calling Register(), not editing a
+// dispatch switch here. This is the pattern that let skillforge/generic-http
+// support pull/resolve without also being wired into publish by hand; new
+// backends now get both for free.
+type BackendFactory func(name string, rc config.RegistryConfig) (Registry, error)
+
+var factories = map[string]BackendFactory{}
+
+// Register makes a registry type constructible via New() / a named
+// cfg.Registries[...].type entry. Intended to be called from an init() in
+// the backend's own file. Panics on a duplicate type name — that's a
+// programming error (two backends claiming the same config type), not a
+// runtime condition to handle gracefully.
+func Register(typeName string, factory BackendFactory) {
+	if _, exists := factories[typeName]; exists {
+		panic(fmt.Sprintf("registry: factory for type %q already registered", typeName))
+	}
+	factories[typeName] = factory
+}
+
 // New returns a Registry for the given source identifier.
 // source may be a named registry key from cfg.Registries, or one of:
 // "github", "gitlab", "artifactory", "local", "skillforge",
@@ -35,48 +59,11 @@ func New(source string, cfg *config.Config) (Registry, error) {
 }
 
 func fromRegistryConfig(name string, rc config.RegistryConfig) (Registry, error) {
-	switch rc.Type {
-	case "github":
-		repoSlug := rc.Repo
-		if repoSlug == "" {
-			repoSlug = rc.URL
-		}
-		if repoSlug == "" {
-			return nil, fmt.Errorf("factory: github registry %q requires repo set to owner/repo", name)
-		}
-		repoSlug = strings.TrimPrefix(repoSlug, "https://github.com/")
-		reg, err := NewGitHubRegistry(repoSlug, authToken(rc))
-		if err != nil {
-			return nil, err
-		}
-		return reg.WithName(name), nil
-	case "gitlab":
-		if rc.Project == "" {
-			return nil, fmt.Errorf("factory: gitlab registry %q requires project set to namespace/project (e.g. \"platform/agent-skills\")", name)
-		}
-		reg, err := NewGitLabRegistry(rc.URL, rc.Project, authToken(rc))
-		if err != nil {
-			return nil, err
-		}
-		return reg.WithName(name), nil
-	case "artifactory":
-		if rc.URL == "" || rc.Repo == "" {
-			return nil, fmt.Errorf("factory: artifactory registry %q requires url and repo", name)
-		}
-		return NewArtifactoryRegistry(rc.URL, rc.Repo, authToken(rc)).WithName(name), nil
-	case "local":
-		path := rc.Path
-		if path == "" {
-			path = rc.URL
-		}
-		return NewLocalRegistry(path).WithName(name), nil
-	case "generic-http":
-		return NewGenericHTTPRegistry(name, rc), nil
-	case "skillforge":
-		return NewSkillForgeRegistry(name, rc), nil
-	default:
+	factory, ok := factories[rc.Type]
+	if !ok {
 		return nil, fmt.Errorf("factory: unknown registry type %q for registry %q", rc.Type, name)
 	}
+	return factory(name, rc)
 }
 
 func authToken(rc config.RegistryConfig) string {

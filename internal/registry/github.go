@@ -8,9 +8,28 @@ import (
 	"os"
 	"strings"
 
+	"github.com/domehahn/skpm/v2/internal/config"
 	"github.com/google/go-github/v60/github"
 	"golang.org/x/oauth2"
 )
+
+func init() {
+	Register("github", func(name string, rc config.RegistryConfig) (Registry, error) {
+		repoSlug := rc.Repo
+		if repoSlug == "" {
+			repoSlug = rc.URL
+		}
+		if repoSlug == "" {
+			return nil, fmt.Errorf("factory: github registry %q requires repo set to owner/repo", name)
+		}
+		repoSlug = strings.TrimPrefix(repoSlug, "https://github.com/")
+		reg, err := NewGitHubRegistry(repoSlug, authToken(rc))
+		if err != nil {
+			return nil, err
+		}
+		return reg.WithName(name), nil
+	})
+}
 
 type GitHubRegistry struct {
 	client *github.Client

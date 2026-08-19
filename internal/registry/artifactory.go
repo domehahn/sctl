@@ -11,8 +11,18 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/domehahn/skpm/v2/internal/config"
 	"golang.org/x/mod/semver"
 )
+
+func init() {
+	Register("artifactory", func(name string, rc config.RegistryConfig) (Registry, error) {
+		if rc.URL == "" || rc.Repo == "" {
+			return nil, fmt.Errorf("factory: artifactory registry %q requires url and repo", name)
+		}
+		return NewArtifactoryRegistry(rc.URL, rc.Repo, authToken(rc)).WithName(name), nil
+	})
+}
 
 type ArtifactoryRegistry struct {
 	name       string
