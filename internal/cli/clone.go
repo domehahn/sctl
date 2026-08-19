@@ -1,12 +1,11 @@
 package cli
 
 import (
-	"archive/zip"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 
+	"github.com/domehahn/skpm/v2/internal/archive"
 	"github.com/domehahn/skpm/v2/internal/cache"
 	"github.com/domehahn/skpm/v2/internal/config"
 	"github.com/domehahn/skpm/v2/internal/registry"
@@ -106,7 +105,7 @@ Examples:
 				}
 			}
 
-			if err := extractZipToDir(tmp.Name(), destDir); err != nil {
+			if err := archive.ExtractStrippingCommonPrefix(tmp.Name(), destDir); err != nil {
 				os.RemoveAll(destDir)
 				return &InternalError{Message: "extract", Cause: err}
 			}
@@ -156,92 +155,6 @@ func lastAt(s string) int {
 		}
 	}
 	return -1
-}
-
-// extractZipToDir extracts a ZIP archive to destDir, stripping a single top-level
-// directory if all entries share one (common convention for skill ZIPs).
-func extractZipToDir(zipPath, destDir string) error {
-	r, err := zip.OpenReader(zipPath)
-	if err != nil {
-		return err
-	}
-	defer r.Close()
-
-	// Detect a common top-level prefix to strip.
-	prefix := commonZipPrefix(r.File)
-
-	for _, f := range r.File {
-		rel := f.Name
-		if prefix != "" && len(rel) > len(prefix) {
-			rel = rel[len(prefix):]
-		}
-		if rel == "" {
-			continue
-		}
-
-		outPath := filepath.Join(destDir, filepath.FromSlash(rel))
-		if !isWithinBase(destDir, outPath) {
-			return fmt.Errorf("zip slip detected: %s", f.Name)
-		}
-
-		if f.FileInfo().IsDir() {
-			if err := os.MkdirAll(outPath, 0o755); err != nil {
-				return err
-			}
-			continue
-		}
-		if err := os.MkdirAll(filepath.Dir(outPath), 0o755); err != nil {
-			return err
-		}
-		if err := extractZipEntry(f, outPath); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func commonZipPrefix(files []*zip.File) string {
-	if len(files) == 0 {
-		return ""
-	}
-	first := files[0].Name
-	slash := len(first)
-	for i := range first {
-		if first[i] == '/' {
-			slash = i + 1
-			break
-		}
-	}
-	prefix := first[:slash]
-	for _, f := range files[1:] {
-		if len(f.Name) < len(prefix) || f.Name[:len(prefix)] != prefix {
-			return ""
-		}
-	}
-	return prefix
-}
-
-func extractZipEntry(f *zip.File, dest string) error {
-	src, err := f.Open()
-	if err != nil {
-		return err
-	}
-	defer src.Close()
-	out, err := os.Create(dest)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-	_, err = io.Copy(out, src)
-	return err
-}
-
-func isWithinBase(base, target string) bool {
-	rel, err := filepath.Rel(base, target)
-	if err != nil {
-		return false
-	}
-	return rel != ".." && (len(rel) < 3 || rel[:3] != "../")
 }
 
 func defaultCacheDir() (string, error) {

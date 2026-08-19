@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/domehahn/skpm/v2/internal/archive"
 	"github.com/domehahn/skpm/v2/internal/cache"
 	"github.com/domehahn/skpm/v2/internal/config"
 	"github.com/domehahn/skpm/v2/internal/installer"
@@ -116,7 +117,7 @@ For skills without a release tag, use --ref to download from a branch or commit:
 				workDir, _ := os.Getwd()
 				for _, dest := range installPaths {
 					absTarget := filepath.Join(workDir, dest)
-					if err := atomicUnzipPublic(zipPath, absTarget); err != nil {
+					if err := archive.AtomicExtract(zipPath, absTarget, ""); err != nil {
 						return &InternalError{Message: fmt.Sprintf("install to %s", dest), Cause: err}
 					}
 				}
@@ -532,67 +533,4 @@ func readCompatibleWith(zipPath string) ([]skill.Platform, error) {
 		}
 	}
 	return nil, fmt.Errorf("skill.yaml not found in ZIP")
-}
-
-// atomicUnzipPublic delegates to the installer package's internal function
-// by re-using the same logic via the public Install path.
-func atomicUnzipPublic(zipPath, destDir string) error {
-	stagingDir := destDir + "~skpm-stage"
-	backupDir := destDir + "~skpm-bak"
-
-	if err := unzipDir(zipPath, stagingDir); err != nil {
-		os.RemoveAll(stagingDir)
-		return err
-	}
-	if _, err := os.Stat(destDir); err == nil {
-		if err := os.Rename(destDir, backupDir); err != nil {
-			os.RemoveAll(stagingDir)
-			return err
-		}
-	}
-	if err := os.MkdirAll(filepath.Dir(destDir), 0o755); err != nil {
-		os.RemoveAll(stagingDir)
-		os.Rename(backupDir, destDir)
-		return err
-	}
-	if err := os.Rename(stagingDir, destDir); err != nil {
-		os.RemoveAll(stagingDir)
-		os.Rename(backupDir, destDir)
-		return err
-	}
-	os.RemoveAll(backupDir)
-	return nil
-}
-
-func unzipDir(src, dest string) error {
-	r, err := zip.OpenReader(src)
-	if err != nil {
-		return err
-	}
-	defer r.Close()
-
-	for _, f := range r.File {
-		outPath := filepath.Join(dest, filepath.FromSlash(f.Name))
-		if f.FileInfo().IsDir() {
-			os.MkdirAll(outPath, 0o755)
-			continue
-		}
-		os.MkdirAll(filepath.Dir(outPath), 0o755)
-		dst, err := os.Create(outPath)
-		if err != nil {
-			return err
-		}
-		src, err := f.Open()
-		if err != nil {
-			dst.Close()
-			return err
-		}
-		_, err = io.Copy(dst, src)
-		src.Close()
-		dst.Close()
-		if err != nil {
-			return err
-		}
-	}
-	return nil
 }

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/domehahn/skpm/v2/internal/archive"
 	"github.com/domehahn/skpm/v2/internal/cache"
 	"github.com/domehahn/skpm/v2/internal/installer"
 	"github.com/domehahn/skpm/v2/internal/lockfile"
@@ -46,13 +47,18 @@ func buildTestLockFile(name, version, sourceURL, sha256 string) *lockfile.LockFi
 	return lf
 }
 
+// Extraction itself (atomic swap, path containment, zip-slip rejection) is
+// covered by tests/unit/archive/zip_test.go against the shared
+// internal/archive package every extraction path in skpm — including this
+// installer — now goes through. These tests only cover that
+// installer.Install actually invokes it.
 func TestAtomicUnzip(t *testing.T) {
 	zipPath := buildTestZIP(t, map[string]string{
 		"SKILL.md":   "# Hello",
 		"skill.yaml": "name: test",
 	})
 	dest := filepath.Join(t.TempDir(), "installed")
-	require.NoError(t, installer.AtomicUnzip(zipPath, dest))
+	require.NoError(t, archive.AtomicExtract(zipPath, dest, ""))
 	assert.FileExists(t, filepath.Join(dest, "SKILL.md"))
 	assert.FileExists(t, filepath.Join(dest, "skill.yaml"))
 }
@@ -64,7 +70,7 @@ func TestAtomicUnzipReplaces(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(dest, "old.txt"), []byte("old"), 0o644))
 
 	zipPath := buildTestZIP(t, map[string]string{"SKILL.md": "new"})
-	require.NoError(t, installer.AtomicUnzip(zipPath, dest))
+	require.NoError(t, archive.AtomicExtract(zipPath, dest, ""))
 
 	assert.FileExists(t, filepath.Join(dest, "SKILL.md"))
 	assert.NoFileExists(t, filepath.Join(dest, "old.txt"))
@@ -73,14 +79,8 @@ func TestAtomicUnzipReplaces(t *testing.T) {
 func TestAtomicUnzipInvalidZIP(t *testing.T) {
 	bad := filepath.Join(t.TempDir(), "bad.zip")
 	require.NoError(t, os.WriteFile(bad, []byte("not a zip"), 0o644))
-	err := installer.AtomicUnzip(bad, filepath.Join(t.TempDir(), "dest"))
+	err := archive.AtomicExtract(bad, filepath.Join(t.TempDir(), "dest"), "")
 	assert.Error(t, err)
-}
-
-func TestIsWithinDir(t *testing.T) {
-	assert.True(t, installer.IsWithinDir("/base", "/base/sub/file"))
-	assert.False(t, installer.IsWithinDir("/base", "/other"))
-	assert.False(t, installer.IsWithinDir("/base", "/base/../escape"))
 }
 
 func TestResolvePaths(t *testing.T) {

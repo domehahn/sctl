@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/domehahn/skpm/v2/internal/archive"
 	"github.com/domehahn/skpm/v2/internal/installer"
 	"github.com/domehahn/skpm/v2/internal/lockfile"
 	"github.com/domehahn/skpm/v2/internal/skill"
@@ -86,7 +87,7 @@ Examples:
 
 			for _, p := range installPaths {
 				dest := filepath.Join(workDir, p)
-				if err := atomicUnzipLocal(zipPath, dest); err != nil {
+				if err := archive.AtomicExtractStrippingCommonPrefix(zipPath, dest); err != nil {
 					return &InternalError{Message: fmt.Sprintf("install to %s", p), Cause: err}
 				}
 				fmt.Fprintf(cmd.OutOrStdout(), "installed  %s\n", p)
@@ -131,7 +132,7 @@ func readSkillYAMLFromZip(zipPath string) (*skill.SkillYAML, error) {
 	}
 	defer r.Close()
 
-	prefix := commonZipPrefix(r.File)
+	prefix := archive.CommonPrefix(r.File)
 
 	for _, f := range r.File {
 		name := f.Name
@@ -154,74 +155,4 @@ func readSkillYAMLFromZip(zipPath string) (*skill.SkillYAML, error) {
 		return &sy, nil
 	}
 	return nil, &UserError{Message: "ZIP does not contain skill.yaml"}
-}
-
-// atomicUnzipLocal is like atomicUnzip from installer, but reads from a local path
-// without cache indirection.
-func atomicUnzipLocal(zipPath, destDir string) error {
-	r, err := zip.OpenReader(zipPath)
-	if err != nil {
-		return err
-	}
-	defer r.Close()
-	prefix := commonZipPrefix(r.File)
-	r.Close()
-
-	staging := destDir + "~skpm-import-staging"
-	backup := destDir + "~skpm-import-backup"
-
-	if err := extractZipWithPrefix(zipPath, staging, prefix); err != nil {
-		os.RemoveAll(staging)
-		return fmt.Errorf("extract: %w", err)
-	}
-
-	if _, err := os.Stat(destDir); err == nil {
-		if err := os.Rename(destDir, backup); err != nil {
-			os.RemoveAll(staging)
-			return fmt.Errorf("backup: %w", err)
-		}
-	}
-	if err := os.MkdirAll(filepath.Dir(destDir), 0o755); err != nil {
-		os.RemoveAll(staging)
-		os.Rename(backup, destDir)
-		return err
-	}
-	if err := os.Rename(staging, destDir); err != nil {
-		os.RemoveAll(staging)
-		os.Rename(backup, destDir)
-		return err
-	}
-	os.RemoveAll(backup)
-	return nil
-}
-
-func extractZipWithPrefix(zipPath, destDir, prefix string) error {
-	r, err := zip.OpenReader(zipPath)
-	if err != nil {
-		return err
-	}
-	defer r.Close()
-
-	for _, f := range r.File {
-		rel := f.Name
-		if prefix != "" {
-			rel = strings.TrimPrefix(rel, prefix)
-		}
-		if rel == "" {
-			continue
-		}
-		outPath := filepath.Join(destDir, filepath.FromSlash(rel))
-		if !isWithinBase(destDir, outPath) {
-			return fmt.Errorf("zip slip: %s", f.Name)
-		}
-		if f.FileInfo().IsDir() {
-			os.MkdirAll(outPath, 0o755)
-			continue
-		}
-		os.MkdirAll(filepath.Dir(outPath), 0o755)
-		if err := extractZipEntry(f, outPath); err != nil {
-			return err
-		}
-	}
-	return nil
 }

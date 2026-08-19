@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
+
+	"github.com/domehahn/skpm/v2/internal/archive"
 )
 
 // DownloadRef downloads a skill directory at a specific git ref (branch, commit, tag)
@@ -136,45 +136,17 @@ func extractSkillFromZIP(r io.ReaderAt, size int64, skillName, skillSubPath, des
 
 	found := false
 	for _, f := range zr.File {
-		if !strings.HasPrefix(f.Name, skillPrefix) {
-			continue
-		}
-		found = true
-		rel := strings.TrimPrefix(f.Name, skillPrefix)
-		if rel == "" {
-			continue
-		}
-
-		outPath := filepath.Join(destDir, filepath.FromSlash(rel))
-		if f.FileInfo().IsDir() {
-			os.MkdirAll(outPath, 0o755)
-			continue
-		}
-		if err := os.MkdirAll(filepath.Dir(outPath), 0o755); err != nil {
-			return err
-		}
-		if err := extractZipFile(f, outPath); err != nil {
-			return err
+		if strings.HasPrefix(f.Name, skillPrefix) {
+			found = true
+			break
 		}
 	}
-
 	if !found {
 		return fmt.Errorf("skill %q not found in archive (tried prefix %q)", skillName, skillPrefix)
 	}
-	return nil
-}
 
-func extractZipFile(f *zip.File, dest string) error {
-	src, err := f.Open()
-	if err != nil {
-		return err
-	}
-	defer src.Close()
-	out, err := os.Create(dest)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-	_, err = io.Copy(out, src)
-	return err
+	// archive.ExtractReader owns path-containment and zip-slip rejection —
+	// see its doc comment for why every extraction path in skpm goes
+	// through it rather than a hand-rolled loop.
+	return archive.ExtractReader(zr, destDir, skillPrefix)
 }

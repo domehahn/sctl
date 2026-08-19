@@ -1554,6 +1554,7 @@ internal/
   registry/           # Registry backends + factory (resolve, download, publish, governance)
   cache/              # SHA256-keyed disk cache
   installer/          # Download + atomic install + platform paths
+  archive/            # The one hardened ZIP extractor every install/add/clone/import path uses
   progress/           # CI-aware progress bars
 testdata/             # Fixture skills for tests
 tests/unit/           # Unit test suite
@@ -1570,7 +1571,7 @@ examples/             # Ready-to-use skill examples and CI templates
 Skills are supply-chain artifacts. `skpm` enforces:
 
 - **SHA256 verification** on every download before writing to disk
-- **Zip-slip protection** — path traversal in ZIP entries is rejected
+- **Zip-slip protection** — every extraction path (`skpm add`, `install`, `clone`, `import`, and GitHub/GitLab `--ref` downloads) goes through one hardened implementation, `internal/archive`: absolute paths, `..` traversal, and symlink entries are rejected outright rather than silently sanitized, and per-file/total decompressed-size and entry-count limits guard against zip bombs. See `internal/archive/zip.go`'s package doc for why there's exactly one extractor instead of several hand-rolled ones.
 - **Atomic writes** — installations are all-or-nothing; no partial state on failure
 - **Cache integrity** — cache keys are the artifact's SHA256; collisions are impossible
 

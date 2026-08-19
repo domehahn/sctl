@@ -39,17 +39,17 @@ type SearchRequest struct {
 // ResolvedArtifact is the result of resolving a skill reference via a registry adapter.
 // It carries skpm-internal fields (Registry, RegistryType, Metadata) beyond the wire format.
 type ResolvedArtifact struct {
-	Namespace      string             `json:"namespace,omitempty"`
-	Name           string             `json:"name"`
-	Version        string             `json:"version"`
-	Registry       string             `json:"registry,omitempty"`
-	RegistryType   string             `json:"registry_type,omitempty"`
-	DownloadURL    string             `json:"download_url"`
-	Artifact       string             `json:"artifact,omitempty"`
-	SHA256         string             `json:"sha256,omitempty"`
-	PackageType    string             `json:"package_type,omitempty"`
-	CompatibleWith []skill.Platform   `json:"compatible_with,omitempty"`
-	Metadata       map[string]string  `json:"metadata,omitempty"`
+	Namespace      string            `json:"namespace,omitempty"`
+	Name           string            `json:"name"`
+	Version        string            `json:"version"`
+	Registry       string            `json:"registry,omitempty"`
+	RegistryType   string            `json:"registry_type,omitempty"`
+	DownloadURL    string            `json:"download_url"`
+	Artifact       string            `json:"artifact,omitempty"`
+	SHA256         string            `json:"sha256,omitempty"`
+	PackageType    string            `json:"package_type,omitempty"`
+	CompatibleWith []skill.Platform  `json:"compatible_with,omitempty"`
+	Metadata       map[string]string `json:"metadata,omitempty"`
 }
 
 // VersionInfo is aliased from sklib/registryapi so version list responses share

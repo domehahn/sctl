@@ -242,11 +242,7 @@ func TestSemverDelta(t *testing.T) {
 	assert.Equal(t, "patch", cli.SemverDelta("1.2.3", "1.2.4"))
 }
 
-// ── isWithinBase ─────────────────────────────────────────────────────────
-
-func TestIsWithinBase(t *testing.T) {
-	assert.True(t, cli.IsWithinBase("/base", "/base/sub/file"))
-	assert.True(t, cli.IsWithinBase("/base", "/base/file"))
-	assert.False(t, cli.IsWithinBase("/base", "/base/../other"))
-	assert.False(t, cli.IsWithinBase("/base", "/other/file"))
-}
+// isWithinBase (the CLI package's local zip-slip containment check) was
+// removed along with the duplicated extraction functions that used it — all
+// extraction now goes through internal/archive, whose equivalent
+// (archive.IsWithinDir) is covered by tests/unit/archive/zip_test.go.

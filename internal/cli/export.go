@@ -43,7 +43,6 @@ var (
 	ConfigGetScalar       = configGetScalar
 	ConfigSetScalar       = configSetScalar
 	SemverDelta           = semverDelta
-	IsWithinBase          = isWithinBase
 	ReadSkillScripts      = readSkillScripts
 	LoadTemplateRegistry  = loadTemplateRegistry
 	SaveTemplateRegistry  = saveTemplateRegistry

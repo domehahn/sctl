@@ -1,19 +1,17 @@
 package installer
 
 import (
-	"archive/zip"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"io"
-	"math/rand"
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 	"sync"
 
+	"github.com/domehahn/skpm/v2/internal/archive"
 	"github.com/domehahn/skpm/v2/internal/cache"
 	"github.com/domehahn/skpm/v2/internal/lockfile"
 	"github.com/domehahn/skpm/v2/internal/registry"
@@ -100,7 +98,7 @@ func (ins *Installer) installOne(ctx context.Context, sl lockfile.SkillLock, opt
 
 	for _, dest := range sl.InstalledTo {
 		absTarget := filepath.Join(opts.WorkDir, dest)
-		if err := atomicUnzip(zipPath, absTarget); err != nil {
+		if err := archive.AtomicExtract(zipPath, absTarget, ""); err != nil {
 			return fmt.Errorf("skill %s: install to %s: %w", sl.Name, dest, err)
 		}
 	}
@@ -165,95 +163,6 @@ func (ins *Installer) ensureCached(ctx context.Context, sl lockfile.SkillLock) (
 		return "", false, fmt.Errorf("cache rename: %w", err)
 	}
 	return finalPath, false, nil
-}
-
-func atomicUnzip(zipPath, destDir string) error {
-	staging := destDir + "~skpm-staging-" + strconv.Itoa(rand.Int())
-	backup := destDir + "~skpm-backup-" + strconv.Itoa(rand.Int())
-
-	if err := unzip(zipPath, staging); err != nil {
-		os.RemoveAll(staging)
-		return fmt.Errorf("unzip to staging: %w", err)
-	}
-
-	if _, err := os.Stat(destDir); err == nil {
-		if err := os.Rename(destDir, backup); err != nil {
-			os.RemoveAll(staging)
-			return fmt.Errorf("backup existing dir: %w", err)
-		}
-	}
-
-	if err := os.MkdirAll(filepath.Dir(destDir), 0o755); err != nil {
-		os.RemoveAll(staging)
-		os.Rename(backup, destDir)
-		return fmt.Errorf("create parent dir: %w", err)
-	}
-
-	if err := os.Rename(staging, destDir); err != nil {
-		os.RemoveAll(staging)
-		os.Rename(backup, destDir)
-		return fmt.Errorf("rename staging to dest: %w", err)
-	}
-
-	os.RemoveAll(backup)
-	return nil
-}
-
-func unzip(src, dest string) error {
-	r, err := zip.OpenReader(src)
-	if err != nil {
-		return err
-	}
-	defer r.Close()
-
-	for _, f := range r.File {
-		outPath := filepath.Join(dest, filepath.FromSlash(f.Name))
-		if !isWithinDir(dest, outPath) {
-			return fmt.Errorf("zip slip detected: %s", f.Name)
-		}
-		if f.FileInfo().IsDir() {
-			if err := os.MkdirAll(outPath, 0o755); err != nil {
-				return err
-			}
-			continue
-		}
-		if err := os.MkdirAll(filepath.Dir(outPath), 0o755); err != nil {
-			return err
-		}
-		if err := extractFile(f, outPath); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func extractFile(f *zip.File, dest string) error {
-	src, err := f.Open()
-	if err != nil {
-		return err
-	}
-	defer src.Close()
-	out, err := os.Create(dest)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-	_, err = io.Copy(out, src)
-	return err
-}
-
-func isWithinDir(base, target string) bool {
-	rel, err := filepath.Rel(base, target)
-	if err != nil {
-		return false
-	}
-	if rel == ".." {
-		return false
-	}
-	if len(rel) >= 3 && rel[:3] == "../" {
-		return false
-	}
-	return true
 }
 
 func buildRegistryFromLock(sl lockfile.SkillLock) registry.Registry {
