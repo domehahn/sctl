@@ -79,3 +79,24 @@ jobs:
         env:
           SKILLFORGE_REPO: ${{ github.workspace }}/SkillForge
         run: go test -timeout 120s -tags e2e ./tests/integration/... -run TestSkillForgeE2E -v
+
+  skil-interop:
+    name: skil attestation interop (cross-repo contract test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Install pinned skil
+        # Pinned to a specific commit, not a tag: skil has no tagged
+        # releases yet. This is the commit that introduced canonical-JSON
+        # attestation signing (internal/signing.CanonicalJSON) — the
+        # foundation internal/attestation.Verify depends on to check a
+        # skil-signed attestation without importing skil as a library.
+        # Bump deliberately when skil's signing scheme changes; don't let
+        # it drift silently.
+        run: go install github.com/domehahn/skil/cmd/skil@4ffeddbd1cd50b955eae5baf031db3e34513490f
+      - name: Run the skil attestation interop test
+        run: go test -timeout 60s -tags e2e ./internal/attestation/... -run TestVerifyInteropsWithRealSkilBinary -v
