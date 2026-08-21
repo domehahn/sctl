@@ -89,14 +89,16 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: Install pinned skil
-        # Pinned to a specific commit, not a tag: skil has no tagged
-        # releases yet. This is the commit that introduced canonical-JSON
-        # attestation signing (internal/signing.CanonicalJSON) — the
-        # foundation internal/attestation.Verify depends on to check a
-        # skil-signed attestation without importing skil as a library.
-        # Bump deliberately when skil's signing scheme changes; don't let
-        # it drift silently.
-        run: go install github.com/domehahn/skil/cmd/skil@4ffeddbd1cd50b955eae5baf031db3e34513490f
+      - name: Install stable skil
+        # Pinned to skil's latest tagged release (v0.2.0), not a raw
+        # commit: this is the "skpm current x skil stable" cell of the
+        # cross-repo compatibility matrix (see COMPATIBILITY.md). v0.2.0
+        # includes the canonical-JSON attestation signing change
+        # (internal/signing.CanonicalJSON) that internal/attestation.Verify
+        # depends on to check a skil-signed attestation without importing
+        # skil as a library. Bump deliberately when skil cuts a new stable
+        # release that changes its signing scheme; don't let it drift
+        # silently.
+        run: go install github.com/domehahn/skil/cmd/skil@v0.2.0
       - name: Run the skil attestation interop test
         run: go test -timeout 60s -tags e2e ./internal/attestation/... -run TestVerifyInteropsWithRealSkilBinary -v
