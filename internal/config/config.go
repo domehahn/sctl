@@ -57,6 +57,13 @@ type Config struct {
 	CacheDir        string                    `yaml:"cache_dir"`
 	LogLevel        string                    `yaml:"log_level"`
 	Concurrency     int                       `yaml:"concurrency"`
+	// TrustedSigners maps an attestation signature's key_id (e.g. from a
+	// `skil key generate` output) to its base64-encoded Ed25519 public
+	// key. Used by `skpm attestations --verify` (see
+	// internal/attestation.Verify) to independently check a stored
+	// attestation's signature without depending on skil as a library —
+	// mirrors skil's own policy.TrustedSigners naming and shape.
+	TrustedSigners map[string]string `yaml:"trusted_signers,omitempty"`
 }
 
 func Load() (*Config, error) {

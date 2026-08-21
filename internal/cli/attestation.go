@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/domehahn/skpm/v2/internal/attestation"
 	"github.com/domehahn/skpm/v2/internal/config"
 	"github.com/domehahn/skpm/v2/internal/registry"
 	"github.com/spf13/cobra"
@@ -134,13 +135,34 @@ interpret it beyond (optionally) reading subject.sha256 as the default
 	return cmd
 }
 
+// attestationWithVerification augments a stored AttestationRecord with the
+// outcome of independently checking its signature (see internal/attestation
+// and config.Config.TrustedSigners), when --verify was passed.
+type attestationWithVerification struct {
+	registry.AttestationRecord
+	Verified      *bool  `json:"verified,omitempty"`
+	VerifiedKeyID string `json:"verified_key_id,omitempty"`
+	VerifyError   string `json:"verify_error,omitempty"`
+}
+
 func newAttestationsCmd() *cobra.Command {
 	var source string
+	var verify bool
 
 	cmd := &cobra.Command{
 		Use:   "attestations <skill>@<version>",
 		Short: "List attestations attached to a published skill version",
-		Args:  cobra.ExactArgs(1),
+		Long: `Lists attestations attached to a published skill version.
+
+With --verify, each attestation's Ed25519 signature (e.g. one produced by
+"skil attest --signing-key") is independently checked against
+config.trusted_signers — a map from key_id to base64 Ed25519 public key —
+without skpm depending on skil as a library. An attestation with no
+"signature" field, or one signed by a key not in trusted_signers, is
+reported as not verified rather than causing the command to fail: it may
+still be a legitimate, unsigned or differently-signed attestation that a
+human should look at.`,
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name, version, err := parseSkillAtVersion(args[0])
 			if err != nil {
@@ -170,23 +192,54 @@ func newAttestationsCmd() *cobra.Command {
 				return &InternalError{Message: "list attestations", Cause: err}
 			}
 
+			if verify && len(cfg.TrustedSigners) == 0 {
+				return &UserError{Message: "--verify requires at least one entry under trusted_signers in the skpm config"}
+			}
+
+			results := make([]attestationWithVerification, len(records))
+			for i, rec := range records {
+				results[i] = attestationWithVerification{AttestationRecord: rec}
+				if !verify {
+					continue
+				}
+				ok := false
+				sig, err := attestation.Verify(rec.Predicate, cfg.TrustedSigners)
+				if err != nil {
+					results[i].Verified = &ok
+					results[i].VerifyError = err.Error()
+					continue
+				}
+				ok = true
+				results[i].Verified = &ok
+				results[i].VerifiedKeyID = sig.KeyID
+			}
+
 			if outputFormat() == OutputJSON {
-				PrintResult(OutputJSON, CommandResult{Success: true, Command: "attestations", Data: records})
+				PrintResult(OutputJSON, CommandResult{Success: true, Command: "attestations", Data: results})
 				return nil
 			}
-			if len(records) == 0 {
+			if len(results) == 0 {
 				fmt.Fprintf(cmd.OutOrStdout(), "No attestations for %s@%s\n", name, version)
 				return nil
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "Attestations for %s@%s:\n", name, version)
-			for _, rec := range records {
-				fmt.Fprintf(cmd.OutOrStdout(), "  - type=%s digest=%s created_by=%s created_at=%s\n",
-					rec.Type, rec.Digest, rec.CreatedBy, rec.CreatedAt)
+			for _, r := range results {
+				fmt.Fprintf(cmd.OutOrStdout(), "  - type=%s digest=%s created_by=%s created_at=%s",
+					r.Type, r.Digest, r.CreatedBy, r.CreatedAt)
+				if r.Verified != nil {
+					if *r.Verified {
+						fmt.Fprintf(cmd.OutOrStdout(), " signature=verified(key=%s)", r.VerifiedKeyID)
+					} else {
+						fmt.Fprintf(cmd.OutOrStdout(), " signature=NOT-VERIFIED(%s)", r.VerifyError)
+					}
+				}
+				fmt.Fprintln(cmd.OutOrStdout())
 			}
 			return nil
 		},
 	}
 
 	cmd.Flags().StringVar(&source, "source", "", "Registry source (uses default_registry if not set)")
+	cmd.Flags().BoolVar(&verify, "verify", false, "Independently verify each attestation's Ed25519 signature against config.trusted_signers")
 	return cmd
 }

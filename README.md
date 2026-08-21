@@ -1019,10 +1019,33 @@ skpm attestations my-skill@1.0.0
 attestation schema) if present. `--type` defaults to `scan`; accepted values
 are registry-specific — SkillForge accepts `signature`, `scan`,
 `provenance`, `sbom`. The attestation file's content is stored as an opaque
-predicate; skpm does not validate or interpret it.
+predicate; skpm does not validate or interpret it — except optionally its
+signature, with `--verify` (see below).
 
 Requires a registry that implements attestation storage (SkillForge
 registries do, via its `/artifacts/skill/.../attestations` API).
+
+#### Verifying a signed attestation
+
+```bash
+skpm attestations my-skill@1.0.0 --verify
+```
+
+`--verify` independently checks each attestation's Ed25519 signature —
+e.g. one produced by `skil attest --signing-key key.pem` — against
+`trusted_signers` in skpm's config, without skpm depending on skil as a
+library: it only needs the attestation's JSON wire form, not skil's Go
+types. `trusted_signers` maps a signing key's `key_id` (printed by
+`skil key generate`) to its base64-encoded Ed25519 public key:
+
+```yaml
+trusted_signers:
+  "sha256:1a2b3c...": "base64-encoded-ed25519-public-key"
+```
+
+An attestation with no signature, or one signed by a key not listed here,
+is reported as not verified rather than failing the command outright —
+it may still be legitimate evidence that a human should look at.
 
 ---
 
