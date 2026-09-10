@@ -22,19 +22,28 @@ const (
 )
 
 type AdmissionRequest struct {
-	Name           string            `json:"name"`
-	Version        string            `json:"version"`
-	PackageDigest  string            `json:"package_digest,omitempty"`
-	ArtifactDigest string            `json:"artifact_digest,omitempty"`
-	Source         string            `json:"source,omitempty"`
-	Registry       string            `json:"registry,omitempty"`
-	Action         string            `json:"action"` // "publish" or "install"
-	Metadata       map[string]string `json:"metadata,omitempty"`
+	Name               string            `json:"name"`
+	Version            string            `json:"version"`
+	PackageDigest      string            `json:"package_digest,omitempty"`
+	ArtifactDigest     string            `json:"artifact_digest,omitempty"`
+	Source             string            `json:"source,omitempty"`
+	Registry           string            `json:"registry,omitempty"`
+	Action             string            `json:"action"` // "publish" or "install"
+	Environment        string            `json:"environment,omitempty"`
+	LockfileDigest     string            `json:"lockfile_digest,omitempty"`
+	Attestations       []string          `json:"attestations,omitempty"`
+	Timestamp          string            `json:"timestamp,omitempty"`
+	Metadata           map[string]string `json:"metadata,omitempty"`
 }
 
 type AdmissionDecision struct {
-	Decision Decision `json:"decision"`
-	Reason   string   `json:"reason,omitempty"`
+	ID            string   `json:"id,omitempty"`
+	Decision      Decision `json:"decision"`
+	Reason        string   `json:"reason,omitempty"`
+	IssuedAt      string   `json:"issued_at,omitempty"`
+	ExpiresAt     string   `json:"expires_at,omitempty"`
+	PackageDigest string   `json:"package_digest,omitempty"`
+	Signature     string   `json:"signature,omitempty"`
 }
 
 type Client interface {
@@ -65,6 +74,10 @@ func NewClientFromEnv() *HTTPClient {
 func (c *HTTPClient) Evaluate(ctx context.Context, req AdmissionRequest) (*AdmissionDecision, error) {
 	if c == nil || c.URL == "" {
 		return &AdmissionDecision{Decision: DecisionAllow}, nil
+	}
+
+	if req.Timestamp == "" {
+		req.Timestamp = time.Now().UTC().Format(time.RFC3339)
 	}
 
 	body, err := json.Marshal(req)
@@ -106,6 +119,23 @@ func (c *HTTPClient) Evaluate(ctx context.Context, req AdmissionRequest) (*Admis
 			return nil, fmt.Errorf("admission decision decode: %w", err)
 		}
 		return &AdmissionDecision{Decision: DecisionAllow}, nil
+	}
+
+	// Validate decision expiration / freshness
+	if dec.ExpiresAt != "" {
+		expTime, err := time.Parse(time.RFC3339, dec.ExpiresAt)
+		if err == nil && time.Now().After(expTime) {
+			if c.Enforce {
+				return &dec, fmt.Errorf("admission decision expired at %s", dec.ExpiresAt)
+			}
+		}
+	}
+
+	// Validate digest binding if returned in decision
+	if dec.PackageDigest != "" && req.PackageDigest != "" && dec.PackageDigest != req.PackageDigest {
+		if c.Enforce {
+			return &dec, fmt.Errorf("admission decision digest mismatch: expected %s, got %s", req.PackageDigest, dec.PackageDigest)
+		}
 	}
 
 	if dec.Decision == DecisionDeny || dec.Decision == DecisionReview || dec.Decision == DecisionReassess {

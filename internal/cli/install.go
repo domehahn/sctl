@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -26,6 +28,8 @@ func newInstallCmd() *cobra.Command {
 	var prune bool
 	var platform string
 	var target string
+	var requireAdmission bool
+	var environment string
 
 	cmd := &cobra.Command{
 		Use:   "install",
@@ -97,9 +101,23 @@ versions from the registry, generates a new agent-skills.lock, and installs.`,
 				WorkDir:     workDir,
 			}
 
+			lockfileBytes, _ := os.ReadFile(lockPath)
+			lockDigest := ""
+			if len(lockfileBytes) > 0 {
+				h := sha256.Sum256(lockfileBytes)
+				lockDigest = "sha256:" + hex.EncodeToString(h[:])
+			}
+			lastDecisionID := ""
+
 			log.Debug().Str("lockfile", lockPath).Int("skills", len(lf.Skills)).Msg("installing")
 
 			admClient := admission.NewClientFromEnv()
+			if requireAdmission || environment == "production" {
+				if admClient == nil || admClient.URL == "" {
+					return &AdmissionError{Message: "admission evidence required in production or --require-admission mode, but SKPM_ADMISSION_URL is not set"}
+				}
+			}
+
 			if admClient != nil {
 				for _, sl := range lf.Skills {
 					req := admission.AdmissionRequest{
@@ -110,16 +128,31 @@ versions from the registry, generates a new agent-skills.lock, and installs.`,
 						Source:         sl.Source,
 						Registry:       sl.Source,
 						Action:         "install",
+						Environment:    environment,
+						LockfileDigest: lockDigest,
 					}
 					dec, err := admClient.Evaluate(cmd.Context(), req)
 					if err != nil {
-						return &AdmissionError{Message: fmt.Sprintf("admission evaluation failed for %s@%s: %v", sl.Name, sl.Version, err)}
+						if requireAdmission || environment == "production" || admClient.Enforce {
+							return &AdmissionError{Message: fmt.Sprintf("admission evaluation failed for %s@%s: %v", sl.Name, sl.Version, err)}
+						}
 					}
-					if dec.Decision != admission.DecisionAllow {
-						log.Warn().Str("skill", sl.Name).Str("decision", string(dec.Decision)).Str("reason", dec.Reason).Msg("admission policy advisory")
+					if dec != nil {
+						if dec.ID != "" {
+							lastDecisionID = dec.ID
+						}
+						if dec.Decision != admission.DecisionAllow {
+							if requireAdmission || environment == "production" || admClient.Enforce {
+								return &AdmissionError{Message: fmt.Sprintf("admission check rejected action install for %s@%s: decision=%s (%s)", sl.Name, sl.Version, dec.Decision, dec.Reason)}
+							}
+							log.Warn().Str("skill", sl.Name).Str("decision", string(dec.Decision)).Str("reason", dec.Reason).Msg("admission policy advisory")
+						}
 					}
 				}
 			}
+
+			opts.LockfileDigest = lockDigest
+			opts.AdmissionDecisionID = lastDecisionID
 
 			result, err := ins.Install(cmd.Context(), lf, opts)
 			if err != nil {
@@ -180,6 +213,8 @@ versions from the registry, generates a new agent-skills.lock, and installs.`,
 	cmd.Flags().BoolVar(&prune, "prune", false, "Remove installed skills no longer present in the lockfile")
 	cmd.Flags().StringVar(&platform, "platform", "", "Install only skills compatible with a platform")
 	cmd.Flags().StringVar(&target, "target", "", "Install into a target directory")
+	cmd.Flags().BoolVar(&requireAdmission, "require-admission", false, "Require skgate admission decision ALLOW before installing")
+	cmd.Flags().StringVar(&environment, "environment", "development", "Target environment for install (e.g. development, production)")
 	return cmd
 }
 

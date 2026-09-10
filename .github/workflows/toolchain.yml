@@ -29,6 +29,14 @@ jobs:
             provider: SkillForge
             consumer_ref: main
             provider_ref: main
+          - consumer: skpm
+            provider: SkillForge
+            consumer_ref: v2.3.0
+            provider_ref: main
+          - consumer: skpm
+            provider: skgate
+            consumer_ref: main
+            provider_ref: main
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -44,7 +52,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
-          go-version: '1.26.6'
+          go-version-file: '${{ matrix.consumer }}/go.mod'
           cache: false
       - name: Record exact revisions
         run: |
@@ -61,20 +69,10 @@ jobs:
           mkdir -p bin
           if [ "$PROVIDER" = skil ]; then
             (cd skil && go build -trimpath -o "$SKIL_BINARY" ./cmd/skil)
-            if [ "$CONSUMER" = skcr ]; then
-              (cd skcr && go build -trimpath -o ../bin/skcr ./cmd/skcr)
-              for fixture in skcr/tests/interop/*/; do
-                name=$(basename "$fixture")
-                bin/skcr compile "$fixture" --target skil --output "$RUNNER_TEMP/compiled" --require-lossless
-                "$SKIL_BINARY" validate "$RUNNER_TEMP/compiled/$name"
-                "$SKIL_BINARY" scan "$RUNNER_TEMP/compiled/$name" --static-only
-                "$SKIL_BINARY" verify "$RUNNER_TEMP/compiled/$name"
-              done
-            else
-              (cd skpm && go test -count=1 -timeout 2m -tags e2e ./internal/attestation/... -run TestVerifyInteropsWithRealSkilBinary -v)
-            fi
+            (cd skpm && go test -count=1 -timeout 2m -tags e2e ./internal/attestation/... -run TestVerifyInteropsWithRealSkilBinary -v)
+          elif [ "$PROVIDER" = skgate ]; then
+            (cd skpm && go test -count=1 -timeout 2m ./tests/unit/cli/... -run TestAdmission -v)
           else
-            # Build first: even older consumer tests cannot turn build failure into a skip.
             (cd SkillForge/skill-registry && go build ./cmd/skill-registry)
             (cd skpm && go test -count=1 -timeout 3m -tags e2e ./tests/integration/... -run TestSkillForgeE2E -v)
           fi

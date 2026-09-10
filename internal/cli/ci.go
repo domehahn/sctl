@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/domehahn/skpm/v2/internal/admission"
 	"github.com/domehahn/skpm/v2/internal/cache"
 	"github.com/domehahn/skpm/v2/internal/config"
 	"github.com/domehahn/skpm/v2/internal/installer"
@@ -18,6 +19,9 @@ func newCICmd() *cobra.Command {
 	var platform string
 	var target string
 	var noVerify bool
+	var production bool
+	var requireAdmission bool
+	var environment string
 
 	cmd := &cobra.Command{
 		Use:   "ci",
@@ -29,11 +33,17 @@ for CI pipelines:
   • Fails immediately if agent-skills.yaml and agent-skills.lock are inconsistent.
   • Always prunes skills no longer in the lockfile.
   • Runs 'skpm verify' after installation to confirm integrity.
+  • Support --production mode enforcing frozen lockfile + skgate admission + production environment.
   • No interactive prompts. Exits non-zero on any issue.
 
 This mirrors the behavior of 'npm ci' / 'cargo fetch --locked'.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			format := outputFormat()
+
+			if production {
+				requireAdmission = true
+				environment = "production"
+			}
 
 			if lockPath == "" {
 				lockPath = lockfile.DefaultFilename
@@ -86,6 +96,40 @@ This mirrors the behavior of 'npm ci' / 'cargo fetch --locked'.`,
 
 			if err := runProjectHook(cmd, "pre_install"); err != nil {
 				return err
+			}
+
+			admClient := admission.NewClientFromEnv()
+			if requireAdmission || environment == "production" {
+				if admClient == nil || admClient.URL == "" {
+					return &AdmissionError{Message: "admission evidence required in production or --require-admission mode, but SKPM_ADMISSION_URL is not set"}
+				}
+			}
+
+			if admClient != nil {
+				for _, sl := range lf.Skills {
+					req := admission.AdmissionRequest{
+						Name:           sl.Name,
+						Version:        sl.Version,
+						PackageDigest:  sl.SHA256,
+						ArtifactDigest: sl.Artifact,
+						Source:         sl.Source,
+						Registry:       sl.Source,
+						Action:         "install",
+						Environment:    environment,
+					}
+					dec, err := admClient.Evaluate(cmd.Context(), req)
+					if err != nil {
+						if requireAdmission || environment == "production" || admClient.Enforce {
+							return &AdmissionError{Message: fmt.Sprintf("admission evaluation failed for %s@%s: %v", sl.Name, sl.Version, err)}
+						}
+					}
+					if dec != nil && dec.Decision != admission.DecisionAllow {
+						if requireAdmission || environment == "production" || admClient.Enforce {
+							return &AdmissionError{Message: fmt.Sprintf("admission check rejected action install for %s@%s: decision=%s (%s)", sl.Name, sl.Version, dec.Decision, dec.Reason)}
+						}
+						log.Warn().Str("skill", sl.Name).Str("decision", string(dec.Decision)).Str("reason", dec.Reason).Msg("admission policy advisory")
+					}
+				}
 			}
 
 			c := cache.New(cfg.CacheDir)
@@ -169,5 +213,8 @@ This mirrors the behavior of 'npm ci' / 'cargo fetch --locked'.`,
 	cmd.Flags().StringVar(&platform, "platform", "", "Install only skills compatible with a platform")
 	cmd.Flags().StringVar(&target, "target", "", "Install into a target directory")
 	cmd.Flags().BoolVar(&noVerify, "no-verify", false, "Skip post-install integrity check")
+	cmd.Flags().BoolVar(&production, "production", false, "Enforce production mode (frozen lockfile + skgate admission + production environment)")
+	cmd.Flags().BoolVar(&requireAdmission, "require-admission", false, "Require skgate admission decision ALLOW before installing")
+	cmd.Flags().StringVar(&environment, "environment", "development", "Target environment for install (e.g. development, production)")
 	return cmd
 }

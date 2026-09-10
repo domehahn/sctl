@@ -14,11 +14,11 @@ jobs:
   build-and-release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: go.mod
           cache: true
@@ -69,12 +69,12 @@ jobs:
           EOF
 
       - name: Attest Artifact Provenance (SLSA / Artifact Attestation)
-        uses: actions/attest-build-provenance@v1
+        uses: actions/attest-build-provenance@c0744595b99d28ee41265e6484364493e042564d # v1
         with:
           subject-path: 'dist/skpm-*'
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@c95fe0f2afb27670ad46714c6fea2be7c87c0a6b # v2
         with:
           files: |
             dist/skpm-linux-amd64

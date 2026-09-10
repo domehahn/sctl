@@ -23,6 +23,8 @@ func newPublishCmd() *cobra.Command {
 		noPush      bool
 		outputDir   string
 		noChangelog bool
+		requireAdmission bool
+		environment string
 	)
 
 	cmd := &cobra.Command{
@@ -139,6 +141,12 @@ Use --dry-run to preview all steps without making changes.`,
 			printStep(cmd, "5/5", "Uploading to", src)
 
 			admClient := admission.NewClientFromEnv()
+			if requireAdmission || environment == "production" {
+				if admClient == nil || admClient.URL == "" {
+					return &AdmissionError{Message: "admission evidence required in production or --require-admission mode, but SKPM_ADMISSION_URL is not set"}
+				}
+			}
+
 			if admClient != nil {
 				req := admission.AdmissionRequest{
 					Name:          pkgResult.Name,
@@ -147,12 +155,18 @@ Use --dry-run to preview all steps without making changes.`,
 					Source:        src,
 					Registry:      src,
 					Action:        "publish",
+					Environment:   environment,
 				}
 				dec, err := admClient.Evaluate(cmd.Context(), req)
 				if err != nil {
-					return &AdmissionError{Message: fmt.Sprintf("admission check failed for %s@%s: %v", pkgResult.Name, pkgResult.Version, err)}
+					if requireAdmission || environment == "production" || admClient.Enforce {
+						return &AdmissionError{Message: fmt.Sprintf("admission check failed for %s@%s: %v", pkgResult.Name, pkgResult.Version, err)}
+					}
 				}
-				if dec.Decision != admission.DecisionAllow {
+				if dec != nil && dec.Decision != admission.DecisionAllow {
+					if requireAdmission || environment == "production" || admClient.Enforce {
+						return &AdmissionError{Message: fmt.Sprintf("admission check rejected action publish for %s@%s: decision=%s (%s)", pkgResult.Name, pkgResult.Version, dec.Decision, dec.Reason)}
+					}
 					log.Warn().Str("skill", pkgResult.Name).Str("decision", string(dec.Decision)).Str("reason", dec.Reason).Msg("admission policy advisory")
 				}
 			}
@@ -240,6 +254,8 @@ Use --dry-run to preview all steps without making changes.`,
 	cmd.Flags().BoolVar(&noPush, "no-push", false, "Skip pushing the git tag")
 	cmd.Flags().StringVar(&outputDir, "output-dir", "", "Directory for the intermediate ZIP (default: temp dir)")
 	cmd.Flags().BoolVar(&noChangelog, "no-changelog", false, "Skip automatic CHANGELOG.md placeholder entry")
+	cmd.Flags().BoolVar(&requireAdmission, "require-admission", false, "Require skgate admission decision ALLOW before publishing")
+	cmd.Flags().StringVar(&environment, "environment", "development", "Target environment for publish (e.g. development, production)")
 	return cmd
 }
 

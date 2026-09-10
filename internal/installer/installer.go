@@ -27,9 +27,11 @@ import (
 var sharedHTTPClient = httpclient.New()
 
 type Options struct {
-	DryRun      bool
-	Concurrency int
-	WorkDir     string
+	DryRun              bool
+	Concurrency         int
+	WorkDir             string
+	LockfileDigest      string
+	AdmissionDecisionID string
 }
 
 type Result struct {
@@ -114,13 +116,24 @@ func (ins *Installer) installOne(ctx context.Context, sl lockfile.SkillLock, opt
 		if pkgDigest != "" && !strings.HasPrefix(pkgDigest, "sha256:") {
 			pkgDigest = "sha256:" + pkgDigest
 		}
+		pkgRef := fmt.Sprintf("%s@%s", sl.Name, sl.Version)
+		if sl.Namespace != "" && sl.Namespace != "default" {
+			pkgRef = fmt.Sprintf("%s/%s@%s", sl.Namespace, sl.Name, sl.Version)
+		}
 		identity := MaterializedIdentity{
-			Name:             sl.Name,
-			Version:          sl.Version,
-			PackageDigest:    pkgDigest,
-			ArtifactDigest:   artDigest,
-			MaterializedPath: absTarget,
-			Verified:         true,
+			SchemaVersion:       "1.0",
+			Package:             pkgRef,
+			PackageDigest:       pkgDigest,
+			CompiledDigest:      artDigest,
+			Registry:            sl.Source,
+			InstalledPath:       absTarget,
+			LockfileDigest:      opts.LockfileDigest,
+			AdmissionDecisionID: opts.AdmissionDecisionID,
+			Name:                sl.Name,
+			Version:             sl.Version,
+			ArtifactDigest:      artDigest,
+			MaterializedPath:    absTarget,
+			Verified:            true,
 		}
 		if idData, err := json.MarshalIndent(identity, "", "  "); err == nil {
 			_ = os.WriteFile(filepath.Join(absTarget, ".skpm-installed.json"), idData, 0o644)
@@ -136,11 +149,19 @@ func (ins *Installer) installOne(ctx context.Context, sl lockfile.SkillLock, opt
 }
 
 type MaterializedIdentity struct {
-	Name             string `json:"name"`
-	Version          string `json:"version"`
-	PackageDigest    string `json:"package_digest"`
-	ArtifactDigest   string `json:"artifact_digest"`
-	MaterializedPath string `json:"materialized_path"`
+	SchemaVersion       string `json:"schema_version"`
+	Package             string `json:"package"`
+	PackageDigest       string `json:"package_digest"`
+	CompiledDigest      string `json:"compiled_digest"`
+	Registry            string `json:"registry"`
+	InstalledPath       string `json:"installed_path"`
+	LockfileDigest      string `json:"lockfile_digest,omitempty"`
+	AdmissionDecisionID string `json:"admission_decision_id,omitempty"`
+	// Backwards compatibility fields
+	Name             string `json:"name,omitempty"`
+	Version          string `json:"version,omitempty"`
+	ArtifactDigest   string `json:"artifact_digest,omitempty"`
+	MaterializedPath string `json:"materialized_path,omitempty"`
 	Verified         bool   `json:"verified"`
 }
 
