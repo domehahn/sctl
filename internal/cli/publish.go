@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/domehahn/skpm/v2/internal/admission"
 	"github.com/domehahn/skpm/v2/internal/config"
 	"github.com/domehahn/skpm/v2/internal/registry"
 	"github.com/domehahn/skpm/v2/internal/skill"
@@ -136,6 +137,26 @@ Use --dry-run to preview all steps without making changes.`,
 
 			// ── Step 5: Upload ─────────────────────────────────────────
 			printStep(cmd, "5/5", "Uploading to", src)
+
+			admClient := admission.NewClientFromEnv()
+			if admClient != nil {
+				req := admission.AdmissionRequest{
+					Name:          pkgResult.Name,
+					Version:       pkgResult.Version,
+					PackageDigest: pkgResult.SHA256,
+					Source:        src,
+					Registry:      src,
+					Action:        "publish",
+				}
+				dec, err := admClient.Evaluate(cmd.Context(), req)
+				if err != nil {
+					return &AdmissionError{Message: fmt.Sprintf("admission check failed for %s@%s: %v", pkgResult.Name, pkgResult.Version, err)}
+				}
+				if dec.Decision != admission.DecisionAllow {
+					log.Warn().Str("skill", pkgResult.Name).Str("decision", string(dec.Decision)).Str("reason", dec.Reason).Msg("admission policy advisory")
+				}
+			}
+
 			reg, err := registry.New(src, cfg)
 			if err != nil {
 				return &UserError{Message: fmt.Sprintf("registry: %v", err)}

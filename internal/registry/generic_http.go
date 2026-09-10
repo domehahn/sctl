@@ -332,7 +332,7 @@ func (r *GenericHTTPRegistry) Attest(ctx context.Context, ref SkillVersionRef, r
 	}
 	var rec AttestationRecord
 	if err := json.NewDecoder(resp.Body).Decode(&rec); err != nil {
-		rec = AttestationRecord{Type: req.Type, Digest: req.Digest, Predicate: req.Predicate}
+		return nil, fmt.Errorf("%s attest: invalid response: %w", r.name, err)
 	}
 	return &rec, nil
 }

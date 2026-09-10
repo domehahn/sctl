@@ -4,11 +4,14 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"sync"
 
 	"github.com/domehahn/skpm/v2/internal/archive"
@@ -106,6 +109,22 @@ func (ins *Installer) installOne(ctx context.Context, sl lockfile.SkillLock, opt
 		if err := archive.AtomicExtract(zipPath, absTarget, ""); err != nil {
 			return fmt.Errorf("skill %s: install to %s: %w", sl.Name, dest, err)
 		}
+		artDigest, _ := computeArtifactDigest(absTarget)
+		pkgDigest := sl.SHA256
+		if pkgDigest != "" && !strings.HasPrefix(pkgDigest, "sha256:") {
+			pkgDigest = "sha256:" + pkgDigest
+		}
+		identity := MaterializedIdentity{
+			Name:             sl.Name,
+			Version:          sl.Version,
+			PackageDigest:    pkgDigest,
+			ArtifactDigest:   artDigest,
+			MaterializedPath: absTarget,
+			Verified:         true,
+		}
+		if idData, err := json.MarshalIndent(identity, "", "  "); err == nil {
+			_ = os.WriteFile(filepath.Join(absTarget, ".skpm-installed.json"), idData, 0o644)
+		}
 	}
 
 	if fromCache {
@@ -114,6 +133,47 @@ func (ins *Installer) installOne(ctx context.Context, sl lockfile.SkillLock, opt
 		result.addInstalled(sl.Name)
 	}
 	return nil
+}
+
+type MaterializedIdentity struct {
+	Name             string `json:"name"`
+	Version          string `json:"version"`
+	PackageDigest    string `json:"package_digest"`
+	ArtifactDigest   string `json:"artifact_digest"`
+	MaterializedPath string `json:"materialized_path"`
+	Verified         bool   `json:"verified"`
+}
+
+func computeArtifactDigest(dir string) (string, error) {
+	var paths []string
+	if err := filepath.WalkDir(dir, func(p string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		rel, _ := filepath.Rel(dir, p)
+		rel = filepath.ToSlash(rel)
+		if rel == ".skpm-installed.json" {
+			return nil
+		}
+		paths = append(paths, rel)
+		return nil
+	}); err != nil {
+		return "", err
+	}
+	sort.Strings(paths)
+	h := sha256.New()
+	for _, rel := range paths {
+		data, err := os.ReadFile(filepath.Join(dir, filepath.FromSlash(rel)))
+		if err != nil {
+			return "", err
+		}
+		_, _ = h.Write([]byte(rel))
+		_, _ = h.Write(data)
+	}
+	return "sha256:" + hex.EncodeToString(h.Sum(nil)), nil
 }
 
 func (ins *Installer) ensureCached(ctx context.Context, sl lockfile.SkillLock) (string, bool, error) {

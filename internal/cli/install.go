@@ -5,6 +5,9 @@ import (
 	"os"
 	"path/filepath"
 
+	"strings"
+
+	"github.com/domehahn/skpm/v2/internal/admission"
 	"github.com/domehahn/skpm/v2/internal/cache"
 	"github.com/domehahn/skpm/v2/internal/config"
 	"github.com/domehahn/skpm/v2/internal/installer"
@@ -44,12 +47,15 @@ versions from the registry, generates a new agent-skills.lock, and installs.`,
 				lockPath = lockfile.DefaultFilename
 			}
 			if frozenLockfile {
+				if _, err := os.Stat(lockPath); os.IsNotExist(err) {
+					return &FrozenLockfileError{Message: fmt.Sprintf("%s does not exist in --frozen-lockfile mode", lockPath)}
+				}
 				outdated, err := lockfileOutdated(cmd.Context(), cfg, manifest.DefaultFilename, lockPath)
 				if err != nil {
-					return &UserError{Message: fmt.Sprintf("check lockfile: %v", err)}
+					return &FrozenLockfileError{Message: fmt.Sprintf("check lockfile: %v", err)}
 				}
 				if outdated {
-					return &UserError{Message: fmt.Sprintf("%s is inconsistent with %s", lockPath, manifest.DefaultFilename)}
+					return &FrozenLockfileError{Message: fmt.Sprintf("%s is inconsistent with %s in --frozen-lockfile mode", lockPath, manifest.DefaultFilename)}
 				}
 			}
 
@@ -57,7 +63,7 @@ versions from the registry, generates a new agent-skills.lock, and installs.`,
 				return err
 			}
 
-			lf, err := resolveLockfile(cmd, lockPath, cfg)
+			lf, err := resolveLockfile(cmd, lockPath, cfg, frozenLockfile)
 			if err != nil {
 				return err
 			}
@@ -93,8 +99,33 @@ versions from the registry, generates a new agent-skills.lock, and installs.`,
 
 			log.Debug().Str("lockfile", lockPath).Int("skills", len(lf.Skills)).Msg("installing")
 
+			admClient := admission.NewClientFromEnv()
+			if admClient != nil {
+				for _, sl := range lf.Skills {
+					req := admission.AdmissionRequest{
+						Name:           sl.Name,
+						Version:        sl.Version,
+						PackageDigest:  sl.SHA256,
+						ArtifactDigest: sl.Artifact,
+						Source:         sl.Source,
+						Registry:       sl.Source,
+						Action:         "install",
+					}
+					dec, err := admClient.Evaluate(cmd.Context(), req)
+					if err != nil {
+						return &AdmissionError{Message: fmt.Sprintf("admission evaluation failed for %s@%s: %v", sl.Name, sl.Version, err)}
+					}
+					if dec.Decision != admission.DecisionAllow {
+						log.Warn().Str("skill", sl.Name).Str("decision", string(dec.Decision)).Str("reason", dec.Reason).Msg("admission policy advisory")
+					}
+				}
+			}
+
 			result, err := ins.Install(cmd.Context(), lf, opts)
 			if err != nil {
+				if strings.Contains(err.Error(), "SHA256 mismatch") {
+					return &IntegrityError{Message: fmt.Sprintf("integrity failure during install: %v", err)}
+				}
 				return &InternalError{Message: "install failed", Cause: err}
 			}
 			if prune && !globalDryRun {
@@ -205,13 +236,17 @@ func fillMissingInstallPaths(lf *lockfile.LockFile) {
 // If the lockfile exists it is read directly.
 // If it is missing but agent-skills.yaml exists, versions are resolved from
 // the registry, a new lockfile is written, and that lockfile is returned.
-func resolveLockfile(cmd *cobra.Command, lockPath string, cfg *config.Config) (*lockfile.LockFile, error) {
+func resolveLockfile(cmd *cobra.Command, lockPath string, cfg *config.Config, frozen bool) (*lockfile.LockFile, error) {
 	if _, err := os.Stat(lockPath); err == nil {
 		lf, err := lockfile.Read(lockPath)
 		if err != nil {
 			return nil, &UserError{Message: fmt.Sprintf("read lockfile: %v", err)}
 		}
 		return lf, nil
+	}
+
+	if frozen {
+		return nil, &FrozenLockfileError{Message: fmt.Sprintf("lockfile %s missing in --frozen-lockfile mode", lockPath)}
 	}
 
 	// lockfile missing — try manifest

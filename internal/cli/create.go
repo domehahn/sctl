@@ -31,70 +31,72 @@ func newCreateCmd() *cobra.Command {
 Run 'skpm publish' inside the directory when ready to release.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			name := args[0]
-			if err := spec.ValidateSkillName(name); err != nil {
-				return &UserError{Message: fmt.Sprintf("invalid skill name %q: use lowercase letters, digits, and hyphens", name)}
-			}
+			return runAuthoringCompatibility(cmd, append([]string{"scaffold", "skill"}, args...), func() error {
+				name := args[0]
+				if err := spec.ValidateSkillName(name); err != nil {
+					return &UserError{Message: fmt.Sprintf("invalid skill name %q: use lowercase letters, digits, and hyphens", name)}
+				}
 
-			destDir := name
-			if _, err := os.Stat(destDir); err == nil {
-				return &UserError{Message: fmt.Sprintf("directory %q already exists", destDir)}
-			}
+				destDir := name
+				if _, err := os.Stat(destDir); err == nil {
+					return &UserError{Message: fmt.Sprintf("directory %q already exists", destDir)}
+				}
 
-			// Interactive prompts when running in a terminal and not suppressed.
-			if !noInteractive && isInteractiveTerminal() {
-				description = promptIfEmpty(cmd, "Description", description)
-				license = promptIfEmpty(cmd, "License (SPDX)", license)
-				if len(platforms) == 0 {
-					raw := promptIfEmpty(cmd, "Platforms (comma-separated, default: all)", "")
-					if raw != "" {
-						for _, p := range strings.Split(raw, ",") {
-							p = strings.TrimSpace(p)
-							if p != "" {
-								platforms = append(platforms, p)
+				// Interactive prompts when running in a terminal and not suppressed.
+				if !noInteractive && isInteractiveTerminal() {
+					description = promptIfEmpty(cmd, "Description", description)
+					license = promptIfEmpty(cmd, "License (SPDX)", license)
+					if len(platforms) == 0 {
+						raw := promptIfEmpty(cmd, "Platforms (comma-separated, default: all)", "")
+						if raw != "" {
+							for _, p := range strings.Split(raw, ",") {
+								p = strings.TrimSpace(p)
+								if p != "" {
+									platforms = append(platforms, p)
+								}
 							}
 						}
 					}
 				}
-			}
 
-			if license == "" {
-				license = "MIT"
-			}
-			if len(platforms) == 0 {
-				platforms = []string{"all"}
-			}
-			if namespace == "" {
-				namespace = "default"
-			}
-
-			if globalDryRun {
-				fmt.Fprintf(cmd.OutOrStdout(), "Dry run: would create skill %q in %s/\n", name, destDir)
-				fmt.Fprintf(cmd.OutOrStdout(), "  description: %s\n  license: %s\n  platforms: %s\n",
-					description, license, strings.Join(platforms, ", "))
-				return nil
-			}
-
-			if err := os.MkdirAll(destDir, 0o755); err != nil {
-				return &InternalError{Message: "create directory", Cause: err}
-			}
-
-			files := scaffoldFiles(name, description, license, namespace, platforms)
-			for filename, content := range files {
-				path := filepath.Join(destDir, filename)
-				if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-					os.RemoveAll(destDir)
-					return &InternalError{Message: fmt.Sprintf("write %s", filename), Cause: err}
+				if license == "" {
+					license = "MIT"
 				}
-			}
+				if len(platforms) == 0 {
+					platforms = []string{"all"}
+				}
+				if namespace == "" {
+					namespace = "default"
+				}
 
-			abs, _ := filepath.Abs(destDir)
-			fmt.Fprintf(cmd.OutOrStdout(), "Created skill %q in %s\n\n", name, abs)
-			fmt.Fprintf(cmd.OutOrStdout(), "Next steps:\n")
-			fmt.Fprintf(cmd.OutOrStdout(), "  1. Edit %s/SKILL.md with your skill's instructions\n", destDir)
-			fmt.Fprintf(cmd.OutOrStdout(), "  2. skpm validate %s\n", destDir)
-			fmt.Fprintf(cmd.OutOrStdout(), "  3. skpm publish %s\n", destDir)
-			return nil
+				if globalDryRun {
+					fmt.Fprintf(cmd.OutOrStdout(), "Dry run: would create skill %q in %s/\n", name, destDir)
+					fmt.Fprintf(cmd.OutOrStdout(), "  description: %s\n  license: %s\n  platforms: %s\n",
+						description, license, strings.Join(platforms, ", "))
+					return nil
+				}
+
+				if err := os.MkdirAll(destDir, 0o755); err != nil {
+					return &InternalError{Message: "create directory", Cause: err}
+				}
+
+				files := scaffoldFiles(name, description, license, namespace, platforms)
+				for filename, content := range files {
+					path := filepath.Join(destDir, filename)
+					if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+						os.RemoveAll(destDir)
+						return &InternalError{Message: fmt.Sprintf("write %s", filename), Cause: err}
+					}
+				}
+
+				abs, _ := filepath.Abs(destDir)
+				fmt.Fprintf(cmd.OutOrStdout(), "Created skill %q in %s\n\n", name, abs)
+				fmt.Fprintf(cmd.OutOrStdout(), "Next steps:\n")
+				fmt.Fprintf(cmd.OutOrStdout(), "  1. Edit %s/SKILL.md with your skill's instructions\n", destDir)
+				fmt.Fprintf(cmd.OutOrStdout(), "  2. skpm validate %s\n", destDir)
+				fmt.Fprintf(cmd.OutOrStdout(), "  3. skpm publish %s\n", destDir)
+				return nil
+			})
 		},
 	}
 

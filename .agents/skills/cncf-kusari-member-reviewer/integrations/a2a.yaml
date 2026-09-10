@@ -1,0 +1,13 @@
+schema_version: "1"
+agent:
+    id: cncf-kusari-member-reviewer
+delegation:
+    accept_from: []
+    delegate_to: []
+    max_depth: 0
+    require_authenticated_origin: true
+    require_capability_subset: true
+trust:
+    incoming_outputs: untrusted
+    promotion_requires:
+        - verification

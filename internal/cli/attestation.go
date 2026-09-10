@@ -46,9 +46,9 @@ output of "skil attest --output attestation.json" — and attaches it to an
 already-published skill version as first-class registry metadata,
 independent of the artifact bytes.
 
-The predicate file's content is stored as-is; skpm does not validate or
-interpret it beyond (optionally) reading subject.sha256 as the default
---digest. Requires a registry that implements attestation storage (see
+The predicate is stored unchanged. Scan evidence must use attestation version 1
+and bind subject.sha256 to the exact published package digest; --digest cannot
+override a different signed subject. Attest the final archive with skil. Requires a registry that implements attestation storage (see
 "skpm registry capabilities" — SkillForge registries support this).`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -79,6 +79,11 @@ interpret it beyond (optionally) reading subject.sha256 as the default
 			}
 			if predicateType == "" {
 				predicateType = defaultSkilAttestationType
+			}
+			if predicateType == "scan" {
+				if err := attestation.BindSubject(payload, digest); err != nil {
+					return &UserError{Message: err.Error()}
+				}
 			}
 
 			cfg, err := config.Load()
@@ -159,9 +164,8 @@ With --verify, each attestation's Ed25519 signature (e.g. one produced by
 config.trusted_signers — a map from key_id to base64 Ed25519 public key —
 without skpm depending on skil as a library. An attestation with no
 "signature" field, or one signed by a key not in trusted_signers, is
-reported as not verified rather than causing the command to fail: it may
-still be a legitimate, unsigned or differently-signed attestation that a
-human should look at.`,
+reported as not verified and causes a nonzero exit. Missing evidence also
+fails verification. Listing without --verify remains an inspection operation.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name, version, err := parseSkillAtVersion(args[0])
@@ -196,6 +200,10 @@ human should look at.`,
 				return &UserError{Message: "--verify requires at least one entry under trusted_signers in the skpm config"}
 			}
 
+			if verify && len(records) == 0 {
+				return &UserError{Message: "ATTESTATION_MISSING: no evidence to verify"}
+			}
+			var verificationError error
 			results := make([]attestationWithVerification, len(records))
 			for i, rec := range records {
 				results[i] = attestationWithVerification{AttestationRecord: rec}
@@ -204,9 +212,13 @@ human should look at.`,
 				}
 				ok := false
 				sig, err := attestation.Verify(rec.Predicate, cfg.TrustedSigners)
+				if err == nil && rec.Type == "scan" {
+					err = attestation.BindSubject(rec.Predicate, rec.Digest)
+				}
 				if err != nil {
 					results[i].Verified = &ok
 					results[i].VerifyError = err.Error()
+					verificationError = &UserError{Message: "ATTESTATION_VERIFICATION_FAILED: " + err.Error()}
 					continue
 				}
 				ok = true
@@ -215,8 +227,8 @@ human should look at.`,
 			}
 
 			if outputFormat() == OutputJSON {
-				PrintResult(OutputJSON, CommandResult{Success: true, Command: "attestations", Data: results})
-				return nil
+				PrintResult(OutputJSON, CommandResult{Success: verificationError == nil, Command: "attestations", Data: results, Errors: verificationErrors(verificationError)})
+				return verificationError
 			}
 			if len(results) == 0 {
 				fmt.Fprintf(cmd.OutOrStdout(), "No attestations for %s@%s\n", name, version)
@@ -235,11 +247,18 @@ human should look at.`,
 				}
 				fmt.Fprintln(cmd.OutOrStdout())
 			}
-			return nil
+			return verificationError
 		},
 	}
 
 	cmd.Flags().StringVar(&source, "source", "", "Registry source (uses default_registry if not set)")
 	cmd.Flags().BoolVar(&verify, "verify", false, "Independently verify each attestation's Ed25519 signature against config.trusted_signers")
 	return cmd
+}
+
+func verificationErrors(err error) []string {
+	if err == nil {
+		return nil
+	}
+	return []string{err.Error()}
 }

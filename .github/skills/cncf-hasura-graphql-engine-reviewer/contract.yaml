@@ -1,0 +1,150 @@
+schema_version: "2"
+capabilities:
+    semantic:
+        required: {}
+    runtime:
+        required:
+            filesystem:
+                read: []
+                write: []
+                delete: []
+            network:
+                inbound: false
+                outbound: false
+                hosts: []
+            commands:
+                execute: false
+                allow: []
+            secrets:
+                read: []
+                expose: false
+            environment:
+                read: []
+            tools:
+                allow: []
+                deny: []
+            mcp:
+                servers: []
+                tools: []
+            persistence: false
+            agent:
+                autonomous_actions: false
+                external_side_effects: false
+                confirm_destructive: true
+                confirm_external: true
+                external_targets: []
+        allowed:
+            filesystem:
+                read: []
+                write: []
+                delete: []
+            network:
+                inbound: false
+                outbound: false
+                hosts: []
+            commands:
+                execute: false
+                allow: []
+            secrets:
+                read: []
+                expose: false
+            environment:
+                read: []
+            tools:
+                allow: []
+                deny: []
+            mcp:
+                servers: []
+                tools: []
+            persistence: false
+            agent:
+                autonomous_actions: false
+                external_side_effects: false
+                confirm_destructive: true
+                confirm_external: true
+                external_targets: []
+identity:
+    accepted_principals:
+        - agent
+        - human
+    credentials:
+        max_ttl_seconds: 900
+        require_audience_binding: true
+        allow_token_passthrough: false
+        required_scopes: []
+delegation:
+    allowed: false
+    max_depth: 0
+    require_child_capability_subset: true
+    require_authenticated_origin: true
+data:
+    classifications:
+        - secret
+        - credential
+        - source-code
+        - personal-data
+    policies:
+        - id: secret
+          sensitivity: restricted
+          purposes:
+            - task-execution
+          retention: invocation
+        - id: credential
+          sensitivity: restricted
+          purposes:
+            - authentication
+          retention: invocation
+        - id: source-code
+          sensitivity: internal
+          purposes:
+            - task-execution
+          retention: invocation
+        - id: personal-data
+          sensitivity: confidential
+          purposes:
+            - task-execution
+          retention: invocation
+    egress:
+        allow: []
+    flows: []
+preconditions: []
+postconditions:
+    - id: repository-state-unchanged
+      type: repository.unchanged
+    - id: no-secret-egress
+      type: data.no_egress
+      classifications:
+        - secret
+        - credential
+invariants:
+    - id: declared-capabilities-only
+      type: capability.declared_only
+    - id: declared-tools-only
+      type: tool.declared_only
+    - id: no-secret-egress
+      type: data.no_egress
+      classifications:
+        - secret
+        - credential
+human_approval:
+    rules: []
+effects:
+    tools: []
+resources:
+    scope: invocation
+    max_runtime_seconds: null
+    max_memory_mb: null
+    max_network_bytes: null
+    max_network_requests: null
+    max_tool_calls: null
+    max_steps: null
+    max_replans: null
+    max_delegation_depth: null
+    max_model_tokens: null
+    max_external_mutations: null
+output:
+    format: structured
+    required_fields: []
+    forbidden_content:
+        - secrets
+        - credentials

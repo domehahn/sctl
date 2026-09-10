@@ -31,6 +31,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 )
 
@@ -88,6 +89,12 @@ func Verify(predicate json.RawMessage, trustedKeys map[string]string) (*Signatur
 		return nil, fmt.Errorf("attestation is not a JSON object: %w", err)
 	}
 
+	if envelope == nil {
+		return nil, errors.New("attestation must be a JSON object")
+	}
+	if err := dec.Decode(new(any)); err != io.EOF {
+		return nil, errors.New("attestation contains trailing JSON data")
+	}
 	sigRaw, ok := envelope["signature"]
 	if !ok {
 		return nil, ErrNoSignature
@@ -107,6 +114,9 @@ func Verify(predicate json.RawMessage, trustedKeys map[string]string) (*Signatur
 	publicKey, err := base64.StdEncoding.DecodeString(encodedKey)
 	if err != nil || len(publicKey) != ed25519.PublicKeySize {
 		return nil, fmt.Errorf("trusted key %q is not a valid base64 Ed25519 public key", sig.KeyID)
+	}
+	if KeyID(publicKey) != sig.KeyID {
+		return nil, errors.New("signature key ID does not match trusted public key")
 	}
 	value, err := base64.StdEncoding.DecodeString(sig.Value)
 	if err != nil || len(value) != ed25519.SignatureSize {

@@ -38,6 +38,9 @@ func newTemplateCmd() *cobra.Command {
   skpm template remove <name>         — delete a saved template
   skpm template show <name>           — print the files in a template
   skpm template use <name> <skill>    — scaffold a new skill from a template`,
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			return runAuthoringCompatibility(cmd, append([]string{"template"}, args...), func() error { return nil })
+		},
 	}
 	cmd.AddCommand(newTemplateListCmd())
 	cmd.AddCommand(newTemplateAddCmd())

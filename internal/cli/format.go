@@ -39,71 +39,73 @@ Defaults to --check (dry-run). Use --write to apply changes.
 Note: re-marshaling skill.yaml removes inline comments.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			dir := "."
-			if len(args) == 1 {
-				dir = args[0]
-			}
-			if _, err := os.Stat(dir); os.IsNotExist(err) {
-				return &UserError{Message: fmt.Sprintf("path not found: %s", dir)}
-			}
-			if !check && !write {
-				check = true
-			}
-
-			changes, err := computeFormatChanges(dir)
-			if err != nil {
-				return &InternalError{Message: "format", Cause: err}
-			}
-
-			format := outputFormat()
-			if format == OutputJSON {
-				type jsonChange struct {
-					File   string `json:"file"`
-					Reason string `json:"reason"`
+			return runAuthoringCompatibility(cmd, append([]string{"format"}, args...), func() error {
+				dir := "."
+				if len(args) == 1 {
+					dir = args[0]
 				}
-				list := make([]jsonChange, len(changes))
-				for i, c := range changes {
-					list[i] = jsonChange{File: c.File, Reason: c.Reason}
+				if _, err := os.Stat(dir); os.IsNotExist(err) {
+					return &UserError{Message: fmt.Sprintf("path not found: %s", dir)}
 				}
-				PrintResult(format, CommandResult{
-					Success: len(changes) == 0 || write,
-					Command: "format",
-					Data: map[string]interface{}{
-						"path":    dir,
-						"changes": list,
-						"written": write && len(changes) > 0,
-					},
-				})
-				if check && len(changes) > 0 {
-					os.Exit(1)
+				if !check && !write {
+					check = true
 				}
-				return nil
-			}
 
-			if len(changes) == 0 {
-				fmt.Fprintf(cmd.OutOrStdout(), "No formatting changes needed: %s\n", dir)
-				return nil
-			}
+				changes, err := computeFormatChanges(dir)
+				if err != nil {
+					return &InternalError{Message: "format", Cause: err}
+				}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "Files that would be reformatted in %s:\n", dir)
-			for _, c := range changes {
-				fmt.Fprintf(cmd.OutOrStdout(), "  %s  (%s)\n", c.File, c.Reason)
-			}
-
-			if write {
-				for _, c := range changes {
-					path := filepath.Join(dir, c.File)
-					if err := os.WriteFile(path, []byte(c.After), 0o644); err != nil {
-						return &InternalError{Message: fmt.Sprintf("write %s", c.File), Cause: err}
+				format := outputFormat()
+				if format == OutputJSON {
+					type jsonChange struct {
+						File   string `json:"file"`
+						Reason string `json:"reason"`
 					}
+					list := make([]jsonChange, len(changes))
+					for i, c := range changes {
+						list[i] = jsonChange{File: c.File, Reason: c.Reason}
+					}
+					PrintResult(format, CommandResult{
+						Success: len(changes) == 0 || write,
+						Command: "format",
+						Data: map[string]interface{}{
+							"path":    dir,
+							"changes": list,
+							"written": write && len(changes) > 0,
+						},
+					})
+					if check && len(changes) > 0 {
+						os.Exit(1)
+					}
+					return nil
 				}
-				fmt.Fprintf(cmd.OutOrStdout(), "\nFormatted %d file(s) in %s\n", len(changes), dir)
-				return nil
-			}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "\n%d file(s) would be reformatted. Run with --write to apply.\n", len(changes))
-			os.Exit(1)
-			return nil
+				if len(changes) == 0 {
+					fmt.Fprintf(cmd.OutOrStdout(), "No formatting changes needed: %s\n", dir)
+					return nil
+				}
+
+				fmt.Fprintf(cmd.OutOrStdout(), "Files that would be reformatted in %s:\n", dir)
+				for _, c := range changes {
+					fmt.Fprintf(cmd.OutOrStdout(), "  %s  (%s)\n", c.File, c.Reason)
+				}
+
+				if write {
+					for _, c := range changes {
+						path := filepath.Join(dir, c.File)
+						if err := os.WriteFile(path, []byte(c.After), 0o644); err != nil {
+							return &InternalError{Message: fmt.Sprintf("write %s", c.File), Cause: err}
+						}
+					}
+					fmt.Fprintf(cmd.OutOrStdout(), "\nFormatted %d file(s) in %s\n", len(changes), dir)
+					return nil
+				}
+
+				fmt.Fprintf(cmd.OutOrStdout(), "\n%d file(s) would be reformatted. Run with --write to apply.\n", len(changes))
+				os.Exit(1)
+				return nil
+			})
 		},
 	}
 

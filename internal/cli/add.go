@@ -97,6 +97,9 @@ For skills without a release tag, use --ref to download from a branch or commit:
 			c := cache.New(cfg.CacheDir)
 			zipPath, actualSHA, err := downloadAndVerify(cmd.Context(), reg, artifact, c)
 			if err != nil {
+				if strings.Contains(err.Error(), "SHA256 mismatch") {
+					return &IntegrityError{Message: fmt.Sprintf("integrity failure during download: %v", err)}
+				}
 				return &InternalError{Message: "download", Cause: err}
 			}
 

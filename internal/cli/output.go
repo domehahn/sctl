@@ -2,8 +2,10 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
+	"regexp"
 
 	"github.com/rs/zerolog/log"
 )
@@ -42,6 +44,27 @@ func (e *InternalError) Error() string {
 	return e.Message
 }
 
+// AdmissionError represents an admission check failure or service rejection (exit 3).
+type AdmissionError struct{ Message string }
+
+func (e *AdmissionError) Error() string { return e.Message }
+
+// FrozenLockfileError represents a lockfile drift / inconsistency in frozen mode (exit 4).
+type FrozenLockfileError struct{ Message string }
+
+func (e *FrozenLockfileError) Error() string { return e.Message }
+
+// IntegrityError represents a checksum mismatch or corrupt artifact (exit 5).
+type IntegrityError struct{ Message string }
+
+func (e *IntegrityError) Error() string { return e.Message }
+
+var secretRegex = regexp.MustCompile(`(?i)(bearer\s+|token[=:]\s*|password[=:]\s*|secret[=:]\s*)([A-Za-z0-9_\-\.]{8,})`)
+
+func redactSecrets(msg string) string {
+	return secretRegex.ReplaceAllString(msg, "$1[REDACTED]")
+}
+
 // HandleError prints a clean error message and exits with the appropriate code.
 // It never prints raw stack traces to the user.
 func HandleError(err error, format OutputFormat) {
@@ -51,33 +74,37 @@ func HandleError(err error, format OutputFormat) {
 
 	var userErr *UserError
 	var internalErr *InternalError
+	var admissionErr *AdmissionError
+	var frozenErr *FrozenLockfileError
+	var integrityErr *IntegrityError
+
+	cleanMsg := redactSecrets(err.Error())
 
 	switch {
-	case isUserError(err, &userErr):
-		if format == OutputJSON {
-			printJSONError("", err.Error())
-		} else {
-			fmt.Fprintf(os.Stderr, "Error: %s\n", err.Error())
-		}
-		log.Debug().Err(err).Msg("user error")
-		os.Exit(1)
+	case errors.As(err, &admissionErr):
+		printErrorAndExit(cleanMsg, format, 3)
+	case errors.As(err, &frozenErr):
+		printErrorAndExit(cleanMsg, format, 4)
+	case errors.As(err, &integrityErr):
+		printErrorAndExit(cleanMsg, format, 5)
 	case isInternalError(err, &internalErr):
-		if format == OutputJSON {
-			printJSONError("", err.Error())
-		} else {
-			fmt.Fprintf(os.Stderr, "Error: %s\n", internalErr.Message)
-		}
-		log.Debug().Err(internalErr.Cause).Msg("internal error")
-		os.Exit(2)
+		msg := redactSecrets(internalErr.Message)
+		printErrorAndExit(msg, format, 2)
+	case isUserError(err, &userErr):
+		printErrorAndExit(cleanMsg, format, 1)
 	default:
-		if format == OutputJSON {
-			printJSONError("", err.Error())
-		} else {
-			fmt.Fprintf(os.Stderr, "Error: %s\n", err.Error())
-		}
-		log.Debug().Err(err).Msg("error")
-		os.Exit(1)
+		printErrorAndExit(cleanMsg, format, 1)
 	}
+}
+
+func printErrorAndExit(msg string, format OutputFormat, code int) {
+	if format == OutputJSON {
+		printJSONError("", msg)
+	} else {
+		fmt.Fprintf(os.Stderr, "Error: %s\n", msg)
+	}
+	log.Debug().Int("exit_code", code).Msg("command error exit")
+	os.Exit(code)
 }
 
 func isUserError(err error, target **UserError) bool {

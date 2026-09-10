@@ -103,7 +103,7 @@ func startSkillForge(t *testing.T, repoDir string) (baseURL string, cleanup func
 	build := exec.Command("go", "build", "-o", binPath, "./cmd/skill-registry")
 	build.Dir = registryDir
 	if out, err := build.CombinedOutput(); err != nil {
-		t.Skipf("could not build SkillForge skill-registry binary (likely missing local toolchain deps, e.g. gcc/libsqlite3-dev for CGO sqlite): %v\n%s", err, out)
+		t.Fatalf("could not build SkillForge skill-registry binary (likely missing local toolchain deps, e.g. gcc/libsqlite3-dev for CGO sqlite): %v\n%s", err, out)
 	}
 
 	port := freeTCPPort(t)
@@ -166,7 +166,7 @@ func startSkillForge(t *testing.T, repoDir string) (baseURL string, cleanup func
 func TestSkillForgeE2EPublishResolveDownload(t *testing.T) {
 	repoDir := findSkillForgeRepo(t)
 	if repoDir == "" {
-		t.Skip("no SkillForge checkout found (set SKILLFORGE_REPO or check out ../SkillForge next to skpm) — skipping cross-repo E2E contract test")
+		t.Fatal("no SkillForge checkout found (set SKILLFORGE_REPO or check out ../SkillForge next to skpm) — skipping cross-repo E2E contract test")
 	}
 
 	baseURL, cleanup := startSkillForge(t, repoDir)

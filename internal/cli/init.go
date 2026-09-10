@@ -178,80 +178,82 @@ For new workflows, prefer ` + "`skcr scaffold skill <name>`" + `.
 Use ` + "`skpm`" + ` for validation, versioning, packaging, publishing, and installation.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			name := args[0]
-			if !isValidSkillName(name) {
-				return &UserError{Message: fmt.Sprintf(
-					"invalid skill name %q — use lowercase letters, digits, and hyphens only", name,
-				)}
-			}
-
-			base := outputDir
-			if base == "" {
-				base = "."
-			}
-			skillDir := filepath.Join(base, name)
-
-			if _, err := os.Stat(skillDir); err == nil {
-				return &UserError{Message: fmt.Sprintf("directory %s already exists", skillDir)}
-			}
-
-			p := newPrompter(cmd)
-			p.header("skpm skill init")
-			p.print("Note: `skpm init skill` is kept for compatibility.\n")
-			p.print("For new workflows, prefer `skcr scaffold skill <name>`.\n\n")
-
-			description := p.ask("Description", "A specialized skill for "+name)
-			version := p.ask("Initial version", "0.1.0")
-			owner := p.ask("Owner (team or username)", "")
-			platforms := p.multiChoose(
-				"Compatible platforms (space-separated: claude-code gitlab-duo github-copilot codex all)",
-				[]string{"claude-code", "gitlab-duo", "github-copilot", "codex"},
-				[]string{"claude-code", "gitlab-duo"},
-			)
-
-			if err := os.MkdirAll(skillDir, 0o755); err != nil {
-				return &InternalError{Message: "create skill dir", Cause: err}
-			}
-
-			data := skillScaffoldData{
-				Name:        name,
-				Description: description,
-				Version:     version,
-				Owner:       owner,
-				Platforms:   platforms,
-				Year:        time.Now().Year(),
-			}
-
-			files := map[string]string{
-				"SKILL.md":        skillMDTemplate,
-				"skill.yaml":      skillYAMLTemplate,
-				"VERSION":         version + "\n",
-				"CHANGELOG.md":    skillChangelogTemplate,
-				"README.md":       skillReadmeTemplate,
-				"LICENSE":         skillLicenseTemplate,
-				"tests/README.md": skillTestsReadmeTemplate,
-			}
-
-			for filename, tmplStr := range files {
-				content, err := renderTemplate(tmplStr, data)
-				if err != nil {
-					return &InternalError{Message: "render " + filename, Cause: err}
+			return runAuthoringCompatibility(cmd, append([]string{"scaffold", "skill"}, args...), func() error {
+				name := args[0]
+				if !isValidSkillName(name) {
+					return &UserError{Message: fmt.Sprintf(
+						"invalid skill name %q — use lowercase letters, digits, and hyphens only", name,
+					)}
 				}
-				if err := writeAtomic(filepath.Join(skillDir, filename), content); err != nil {
-					return &InternalError{Message: "write " + filename, Cause: err}
-				}
-			}
 
-			p.print("\n✓ Created %s/\n", skillDir)
-			for f := range files {
-				p.print("    %s/%s\n", name, f)
-			}
-			p.print("\nNext steps:\n")
-			p.print("  1. Edit %s/SKILL.md with your skill's instructions\n", name)
-			p.print("  2. skpm validate %s\n", skillDir)
-			p.print("  3. skpm version bump patch %s\n", skillDir)
-			p.print("  4. skpm package %s\n", skillDir)
-			return nil
+				base := outputDir
+				if base == "" {
+					base = "."
+				}
+				skillDir := filepath.Join(base, name)
+
+				if _, err := os.Stat(skillDir); err == nil {
+					return &UserError{Message: fmt.Sprintf("directory %s already exists", skillDir)}
+				}
+
+				p := newPrompter(cmd)
+				p.header("skpm skill init")
+				p.print("Note: `skpm init skill` is kept for compatibility.\n")
+				p.print("For new workflows, prefer `skcr scaffold skill <name>`.\n\n")
+
+				description := p.ask("Description", "A specialized skill for "+name)
+				version := p.ask("Initial version", "0.1.0")
+				owner := p.ask("Owner (team or username)", "")
+				platforms := p.multiChoose(
+					"Compatible platforms (space-separated: claude-code gitlab-duo github-copilot codex all)",
+					[]string{"claude-code", "gitlab-duo", "github-copilot", "codex"},
+					[]string{"claude-code", "gitlab-duo"},
+				)
+
+				if err := os.MkdirAll(skillDir, 0o755); err != nil {
+					return &InternalError{Message: "create skill dir", Cause: err}
+				}
+
+				data := skillScaffoldData{
+					Name:        name,
+					Description: description,
+					Version:     version,
+					Owner:       owner,
+					Platforms:   platforms,
+					Year:        time.Now().Year(),
+				}
+
+				files := map[string]string{
+					"SKILL.md":        skillMDTemplate,
+					"skill.yaml":      skillYAMLTemplate,
+					"VERSION":         version + "\n",
+					"CHANGELOG.md":    skillChangelogTemplate,
+					"README.md":       skillReadmeTemplate,
+					"LICENSE":         skillLicenseTemplate,
+					"tests/README.md": skillTestsReadmeTemplate,
+				}
+
+				for filename, tmplStr := range files {
+					content, err := renderTemplate(tmplStr, data)
+					if err != nil {
+						return &InternalError{Message: "render " + filename, Cause: err}
+					}
+					if err := writeAtomic(filepath.Join(skillDir, filename), content); err != nil {
+						return &InternalError{Message: "write " + filename, Cause: err}
+					}
+				}
+
+				p.print("\n✓ Created %s/\n", skillDir)
+				for f := range files {
+					p.print("    %s/%s\n", name, f)
+				}
+				p.print("\nNext steps:\n")
+				p.print("  1. Edit %s/SKILL.md with your skill's instructions\n", name)
+				p.print("  2. skpm validate %s\n", skillDir)
+				p.print("  3. skpm version bump patch %s\n", skillDir)
+				p.print("  4. skpm package %s\n", skillDir)
+				return nil
+			})
 		},
 	}
 	cmd.Flags().StringVar(&outputDir, "output-dir", "", "Parent directory for the skill (default: current directory)")
@@ -351,11 +353,15 @@ func configFilePath() (string, error) {
 }
 
 func writeAtomic(path, content string) error {
+	return writeAtomicWithMode(path, content, 0o644)
+}
+
+func writeAtomicWithMode(path, content string, mode os.FileMode) error {
 	tmp := path + ".tmp"
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
-	if err := os.WriteFile(tmp, []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(tmp, []byte(content), mode); err != nil {
 		return err
 	}
 	return os.Rename(tmp, path)

@@ -79,7 +79,7 @@ func attestationsServer(t *testing.T, predicate json.RawMessage) *httptest.Serve
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"attestations": []map[string]any{
-				{"type": "scan", "digest": "abc123", "predicate": predicate, "created_by": "skil"},
+				{"type": "scan", "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "predicate": predicate, "created_by": "skil"},
 			},
 		})
 	}))
@@ -104,7 +104,7 @@ func TestAttestationsVerifyAcceptsGenuineSignature(t *testing.T) {
 	kid := keyID(pub)
 	predicate := signPredicate(t, map[string]any{
 		"version": 1,
-		"subject": map[string]any{"name": "demo-skill", "sha256": "abc123"},
+		"subject": map[string]any{"name": "demo-skill", "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
 	}, priv, kid)
 
 	srv := attestationsServer(t, predicate)
@@ -128,7 +128,7 @@ func TestAttestationsVerifyRejectsUntrustedKey(t *testing.T) {
 	kid := keyID(pub)
 	predicate := signPredicate(t, map[string]any{
 		"version": 1,
-		"subject": map[string]any{"name": "demo-skill", "sha256": "abc123"},
+		"subject": map[string]any{"name": "demo-skill", "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
 	}, priv, kid)
 
 	srv := attestationsServer(t, predicate)
@@ -142,7 +142,7 @@ func TestAttestationsVerifyRejectsUntrustedKey(t *testing.T) {
 	root := cli.NewRootCmd()
 	root.SetArgs([]string{"attestations", "demo-skill@1.0.0", "--verify"})
 	root.SetOut(&buf)
-	require.NoError(t, root.Execute())
+	require.ErrorContains(t, root.Execute(), "ATTESTATION_VERIFICATION_FAILED")
 
 	out := buf.String()
 	assert.Contains(t, out, "NOT-VERIFIED")
@@ -155,7 +155,7 @@ func TestAttestationsWithoutVerifyDoesNotCheckSignature(t *testing.T) {
 	kid := keyID(pub)
 	predicate := signPredicate(t, map[string]any{
 		"version": 1,
-		"subject": map[string]any{"name": "demo-skill", "sha256": "abc123"},
+		"subject": map[string]any{"name": "demo-skill", "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
 	}, priv, kid)
 
 	srv := attestationsServer(t, predicate)

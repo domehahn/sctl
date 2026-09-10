@@ -1,0 +1,3 @@
+# cncf-golem-cloud-wasm-reviewer Assets
+
+Place templates, static resources, schemas, diagrams, example payloads, or lookup tables for this skill here.

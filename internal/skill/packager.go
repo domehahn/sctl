@@ -16,7 +16,6 @@ import (
 
 	"github.com/domehahn/sklib/packageio"
 	"github.com/domehahn/sklib/spec"
-	"gopkg.in/yaml.v3"
 )
 
 type PackageResult struct {
@@ -171,6 +170,12 @@ func addDirToZIP(zw *zip.Writer, baseDir, currentDir string) (map[string]string,
 		if relPath == "." {
 			return nil
 		}
+		if relPath == "manifest.json" || relPath == "checksums.txt" {
+			return nil
+		}
+		if entry.Type()&os.ModeSymlink != 0 {
+			return fmt.Errorf("symlink is not allowed in a package: %s", relPath)
+		}
 		if shouldSkip(entry.Name(), relPath) {
 			if entry.IsDir() {
 				return filepath.SkipDir
@@ -215,6 +220,7 @@ func addBytesToZIP(zw *zip.Writer, relPath string, data []byte) error {
 		Method:   zip.Deflate,
 		Modified: reproducibleTime(),
 	}
+	header.SetMode(0o644)
 	dst, err := zw.CreateHeader(header)
 	if err != nil {
 		return fmt.Errorf("create zip entry %s: %w", relPath, err)
@@ -240,11 +246,11 @@ func readSkillYAML(dir string) (*SkillYAML, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read skill.yaml: %w", err)
 	}
-	var sy SkillYAML
-	if err := yaml.Unmarshal(data, &sy); err != nil {
+	sy, _, err := decodeSkillMetadata(data)
+	if err != nil {
 		return nil, fmt.Errorf("parse skill.yaml: %w", err)
 	}
-	return &sy, nil
+	return sy, nil
 }
 
 func sha256Hex(data []byte) string {

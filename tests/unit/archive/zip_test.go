@@ -301,3 +301,32 @@ func TestExtractInvalidZIP(t *testing.T) {
 	err := archive.Extract(bad, filepath.Join(t.TempDir(), "dest"), "")
 	assert.Error(t, err)
 }
+
+func TestExtractRejectsCaseCollision(t *testing.T) {
+	destDir := filepath.Join(t.TempDir(), "installed")
+	zipPath := buildZIP(t, map[string]string{
+		"File.txt": "content 1",
+		"file.txt": "content 2",
+	})
+	err := archive.Extract(zipPath, destDir, "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "case collision")
+}
+
+func TestExtractRejectsDeviceFiles(t *testing.T) {
+	destDir := filepath.Join(t.TempDir(), "installed")
+	f, err := os.CreateTemp(t.TempDir(), "device-*.zip")
+	require.NoError(t, err)
+	zw := zip.NewWriter(f)
+	hdr := &zip.FileHeader{Name: "dev-pipe", Method: zip.Deflate}
+	hdr.SetMode(fs.ModeNamedPipe | 0o666)
+	w, err := zw.CreateHeader(hdr)
+	require.NoError(t, err)
+	_, _ = w.Write([]byte("data"))
+	require.NoError(t, zw.Close())
+	f.Close()
+
+	err = archive.Extract(f.Name(), destDir, "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "refusing non-regular entry mode")
+}
