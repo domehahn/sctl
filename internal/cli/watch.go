@@ -36,86 +36,88 @@ control how long to wait after the last change before re-running (default: 300ms
 Press Ctrl+C to stop.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			scriptName := args[0]
+			return runAuthoringCompatibility(cmd, append([]string{"watch"}, args...), func() error {
+				scriptName := args[0]
 
-			skillDir := dir
-			if skillDir == "" {
-				skillDir = "."
-			}
-			absDir, err := filepath.Abs(skillDir)
-			if err != nil {
-				return &InternalError{Message: "resolve path", Cause: err}
-			}
-
-			// Verify the script exists before starting the watcher.
-			scripts, err := readSkillScripts(absDir)
-			if err != nil {
-				return err
-			}
-			if _, ok := scripts[scriptName]; !ok {
-				names := scriptNames(scripts)
-				return &UserError{Message: fmt.Sprintf("unknown script %q; available: %s", scriptName, strings.Join(names, ", "))}
-			}
-
-			watchExts := map[string]bool{}
-			for _, e := range exts {
-				e = strings.TrimPrefix(e, ".")
-				watchExts["."+e] = true
-			}
-			if len(watchExts) == 0 {
-				for _, e := range []string{".md", ".yaml", ".yml", ".txt", ".json"} {
-					watchExts[e] = true
+				skillDir := dir
+				if skillDir == "" {
+					skillDir = "."
 				}
-			}
+				absDir, err := filepath.Abs(skillDir)
+				if err != nil {
+					return &InternalError{Message: "resolve path", Cause: err}
+				}
 
-			watcher, err := fsnotify.NewWatcher()
-			if err != nil {
-				return &InternalError{Message: "create watcher", Cause: err}
-			}
-			defer watcher.Close()
+				// Verify the script exists before starting the watcher.
+				scripts, err := readSkillScripts(absDir)
+				if err != nil {
+					return err
+				}
+				if _, ok := scripts[scriptName]; !ok {
+					names := scriptNames(scripts)
+					return &UserError{Message: fmt.Sprintf("unknown script %q; available: %s", scriptName, strings.Join(names, ", "))}
+				}
 
-			if err := watcher.Add(absDir); err != nil {
-				return &InternalError{Message: "watch directory", Cause: err}
-			}
+				watchExts := map[string]bool{}
+				for _, e := range exts {
+					e = strings.TrimPrefix(e, ".")
+					watchExts["."+e] = true
+				}
+				if len(watchExts) == 0 {
+					for _, e := range []string{".md", ".yaml", ".yml", ".txt", ".json"} {
+						watchExts[e] = true
+					}
+				}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "Watching %s for changes (script: %q, debounce: %s)\n", absDir, scriptName, debounce)
-			fmt.Fprintf(cmd.OutOrStdout(), "Press Ctrl+C to stop.\n\n")
+				watcher, err := fsnotify.NewWatcher()
+				if err != nil {
+					return &InternalError{Message: "create watcher", Cause: err}
+				}
+				defer watcher.Close()
 
-			// Run once immediately on start.
-			runWatchScript(cmd, absDir, scriptName)
+				if err := watcher.Add(absDir); err != nil {
+					return &InternalError{Message: "watch directory", Cause: err}
+				}
 
-			var timer *time.Timer
-			ctx := cmd.Context()
+				fmt.Fprintf(cmd.OutOrStdout(), "Watching %s for changes (script: %q, debounce: %s)\n", absDir, scriptName, debounce)
+				fmt.Fprintf(cmd.OutOrStdout(), "Press Ctrl+C to stop.\n\n")
 
-			for {
-				select {
-				case <-ctx.Done():
-					return nil
+				// Run once immediately on start.
+				runWatchScript(cmd, absDir, scriptName)
 
-				case event, ok := <-watcher.Events:
-					if !ok {
+				var timer *time.Timer
+				ctx := cmd.Context()
+
+				for {
+					select {
+					case <-ctx.Done():
 						return nil
-					}
-					if !watchExts[filepath.Ext(event.Name)] {
-						continue
-					}
-					if event.Has(fsnotify.Write) || event.Has(fsnotify.Create) || event.Has(fsnotify.Remove) {
-						if timer != nil {
-							timer.Stop()
+
+					case event, ok := <-watcher.Events:
+						if !ok {
+							return nil
 						}
-						timer = time.AfterFunc(debounce, func() {
-							fmt.Fprintf(cmd.OutOrStdout(), "\n[%s] change detected: %s\n", time.Now().Format("15:04:05"), filepath.Base(event.Name))
-							runWatchScript(cmd, absDir, scriptName)
-						})
-					}
+						if !watchExts[filepath.Ext(event.Name)] {
+							continue
+						}
+						if event.Has(fsnotify.Write) || event.Has(fsnotify.Create) || event.Has(fsnotify.Remove) {
+							if timer != nil {
+								timer.Stop()
+							}
+							timer = time.AfterFunc(debounce, func() {
+								fmt.Fprintf(cmd.OutOrStdout(), "\n[%s] change detected: %s\n", time.Now().Format("15:04:05"), filepath.Base(event.Name))
+								runWatchScript(cmd, absDir, scriptName)
+							})
+						}
 
-				case watchErr, ok := <-watcher.Errors:
-					if !ok {
-						return nil
+					case watchErr, ok := <-watcher.Errors:
+						if !ok {
+							return nil
+						}
+						fmt.Fprintf(cmd.ErrOrStderr(), "watcher error: %v\n", watchErr)
 					}
-					fmt.Fprintf(cmd.ErrOrStderr(), "watcher error: %v\n", watchErr)
 				}
-			}
+			})
 		},
 	}
 

@@ -958,3 +958,20 @@ func indexOf(s, substr string) int {
 	}
 	return -1
 }
+
+func TestPackageDeterminism(t *testing.T) {
+	dir1 := writeSkillFixture(t, validSkillFiles)
+	require.NoError(t, os.MkdirAll(filepath.Join(dir1, "tests"), 0o755))
+	dir2 := writeSkillFixture(t, validSkillFiles)
+	require.NoError(t, os.MkdirAll(filepath.Join(dir2, "tests"), 0o755))
+
+	out1 := t.TempDir()
+	out2 := t.TempDir()
+
+	res1, err := skill.NewPackager().Package(context.Background(), dir1, out1)
+	require.NoError(t, err)
+	res2, err := skill.NewPackager().Package(context.Background(), dir2, out2)
+	require.NoError(t, err)
+
+	assert.Equal(t, res1.SHA256, res2.SHA256, "packaging identical directories must yield identical SHA256")
+}

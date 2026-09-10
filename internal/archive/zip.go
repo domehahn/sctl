@@ -110,7 +110,10 @@ func ExtractReader(zr *zip.Reader, destDir, prefix string) error {
 		return fmt.Errorf("archive: create destination: %w", err)
 	}
 
+	forbiddenModes := fs.ModeSymlink | fs.ModeDevice | fs.ModeNamedPipe | fs.ModeSocket | fs.ModeCharDevice | fs.ModeIrregular | fs.ModeSetuid | fs.ModeSetgid
+	seenPaths := make(map[string]string)
 	var totalSize uint64
+
 	for _, f := range zr.File {
 		name := f.Name
 		if prefix != "" {
@@ -123,13 +126,26 @@ func ExtractReader(zr *zip.Reader, destDir, prefix string) error {
 			continue
 		}
 
-		if f.Mode()&fs.ModeSymlink != 0 {
-			return fmt.Errorf("archive: refusing symlink entry %q", f.Name)
+		if f.Mode()&forbiddenModes != 0 {
+			return fmt.Errorf("archive: refusing non-regular entry mode %v for %q", f.Mode(), f.Name)
 		}
 
 		outPath, err := SafeJoin(destDir, name)
 		if err != nil {
 			return err
+		}
+
+		lowerPath := strings.ToLower(filepath.Clean(outPath))
+		if existing, ok := seenPaths[lowerPath]; ok && existing != outPath {
+			return fmt.Errorf("archive: refusing case collision between %q and %q", existing, outPath)
+		}
+		seenPaths[lowerPath] = outPath
+
+		if f.CompressedSize64 > 0 && f.UncompressedSize64 > 1024*1024 {
+			ratio := f.UncompressedSize64 / f.CompressedSize64
+			if ratio > 1000 {
+				return fmt.Errorf("archive: refusing zip bomb (extreme compression ratio %d:1) for %q", ratio, f.Name)
+			}
 		}
 
 		if f.FileInfo().IsDir() {

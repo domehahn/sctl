@@ -59,15 +59,17 @@ func newVersionBumpPartCmd(part string) *cobra.Command {
 		Short: "Bump the " + part + " version component",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			state, err := readSkillVersionState(args[0])
-			if err != nil {
-				return err
-			}
-			next, err := bumpStableVersion(state.Version, part)
-			if err != nil {
-				return err
-			}
-			return writeSkillVersion(cmd, args[0], state.Version, next, "version bump "+part)
+			return runAuthoringCompatibility(cmd, append([]string{"version", "bump", part}, args...), func() error {
+				state, err := readSkillVersionState(args[0])
+				if err != nil {
+					return err
+				}
+				next, err := bumpStableVersion(state.Version, part)
+				if err != nil {
+					return err
+				}
+				return writeSkillVersion(cmd, args[0], state.Version, next, "version bump "+part)
+			})
 		},
 	}
 }
@@ -78,15 +80,17 @@ func newVersionSetCmd() *cobra.Command {
 		Short: "Set a skill version",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			next, err := normalizeStableVersion(args[0])
-			if err != nil {
-				return err
-			}
-			state, err := readSkillVersionState(args[1])
-			if err != nil {
-				return err
-			}
-			return writeSkillVersion(cmd, args[1], state.Version, next, "version set")
+			return runAuthoringCompatibility(cmd, append([]string{"version", "set"}, args...), func() error {
+				next, err := normalizeStableVersion(args[0])
+				if err != nil {
+					return err
+				}
+				state, err := readSkillVersionState(args[1])
+				if err != nil {
+					return err
+				}
+				return writeSkillVersion(cmd, args[1], state.Version, next, "version set")
+			})
 		},
 	}
 }

@@ -81,34 +81,36 @@ Unlike 'skpm version bump', this does not change the version number —
 it just adds text to an existing section (or creates the section if absent).`,
 		Args: cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			message := args[0]
-			dir := "."
-			if len(args) == 2 {
-				dir = args[1]
-			}
-
-			ver := version
-			if ver == "" {
-				v, err := skill.ReadVersion(dir)
-				if err != nil {
-					return &UserError{Message: fmt.Sprintf("read VERSION: %v (use --version to specify)", err)}
+			return runAuthoringCompatibility(cmd, append([]string{"changelog", "add"}, args...), func() error {
+				message := args[0]
+				dir := "."
+				if len(args) == 2 {
+					dir = args[1]
 				}
-				ver = v
-			}
-			// Normalise: strip leading v.
-			ver = strings.TrimPrefix(ver, "v")
 
-			if globalDryRun {
-				fmt.Fprintf(cmd.OutOrStdout(), "Dry run: would add to %s/CHANGELOG.md [%s]: %s\n", dir, ver, message)
+				ver := version
+				if ver == "" {
+					v, err := skill.ReadVersion(dir)
+					if err != nil {
+						return &UserError{Message: fmt.Sprintf("read VERSION: %v (use --version to specify)", err)}
+					}
+					ver = v
+				}
+				// Normalise: strip leading v.
+				ver = strings.TrimPrefix(ver, "v")
+
+				if globalDryRun {
+					fmt.Fprintf(cmd.OutOrStdout(), "Dry run: would add to %s/CHANGELOG.md [%s]: %s\n", dir, ver, message)
+					return nil
+				}
+
+				if err := addChangelogMessage(dir, ver, message); err != nil {
+					return err
+				}
+
+				fmt.Fprintf(cmd.OutOrStdout(), "Added to CHANGELOG.md [%s]: %s\n", ver, message)
 				return nil
-			}
-
-			if err := addChangelogMessage(dir, ver, message); err != nil {
-				return err
-			}
-
-			fmt.Fprintf(cmd.OutOrStdout(), "Added to CHANGELOG.md [%s]: %s\n", ver, message)
-			return nil
+			})
 		},
 	}
 

@@ -111,6 +111,15 @@ func TestVersionDefault(t *testing.T) {
 	assert.Equal(t, 1, lf.Version)
 }
 
+func TestUnsupportedVersionRejected(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, lockfile.DefaultFilename)
+	require.NoError(t, os.WriteFile(path, []byte("version: 99\nskills: []"), 0o644))
+	_, err := lockfile.Read(path)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unsupported lockfile schema version")
+}
+
 // TestRoundtripResolvedAt verifies that ResolvedAt/GeneratedBy survive a write-read
 // cycle with the correct YAML keys (resolved_at / generated_by, not generated_at).
 func TestRoundtripResolvedAt(t *testing.T) {

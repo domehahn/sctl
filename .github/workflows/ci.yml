@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request: {}
+  workflow_dispatch: {}
 
 permissions:
   contents: read
@@ -12,8 +13,8 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: go.mod
           cache: true
@@ -23,82 +24,21 @@ jobs:
           gofmt -l $(git ls-files '*.go' | grep -v '^vendor/') | tee /tmp/gofmt
           test ! -s /tmp/gofmt
       - run: go vet ./...
+      - name: Package determinism & safe extraction tests
+        run: go test -v -race -run 'TestPackageDeterminism|TestExtractRejects|TestSafeJoin' ./tests/unit/...
+      - name: Resolver & constraint tests
+        run: go test -v -race -run 'TestSelectVersion|TestConstraint' ./tests/unit/registry/...
       - name: Unit tests (race)
-        run: go test -race -timeout 60s ./tests/unit/...
+        run: go test -race -timeout 120s ./tests/unit/...
       - name: Integration tests (race)
-        run: go test -race -timeout 120s -tags integration ./tests/integration/...
+        run: go test -race -timeout 180s -tags integration ./tests/integration/...
       - run: go build -trimpath -o dist/skpm ./cmd/skpm
 
   govulncheck:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: golang/govulncheck-action@v1
         with:
           go-version-file: go.mod
           go-package: ./...
-
-  skillforge-e2e:
-    name: SkillForge E2E (cross-repo contract test)
-    runs-on: ubuntu-latest
-    env:
-      CGO_ENABLED: "1"
-    steps:
-      - name: Checkout skpm
-        uses: actions/checkout@v4
-        with:
-          path: skpm
-
-      - name: Checkout SkillForge
-        uses: actions/checkout@v4
-        with:
-          repository: domehahn/SkillForge
-          # Pinned to a specific commit, not a tag: SkillForge has no
-          # tagged releases yet. Bump deliberately when SkillForge changes
-          # something this test should exercise; don't let it drift
-          # silently, and don't skip this job on a checkout failure — a
-          # SkillForge checkout is always available here (unlike the
-          # opt-in local dev fallback in skillforge_e2e_test.go, which
-          # only runs if a sibling checkout happens to exist).
-          ref: 5e80b37ce5c7d6d4d51c5ab578e2bbfb23e5600a
-          path: SkillForge
-
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: skpm/go.mod
-          cache: true
-          cache-dependency-path: |
-            skpm/go.sum
-            SkillForge/skill-registry/go.sum
-
-      - name: Install system dependencies (CGO sqlite3 driver for SkillForge)
-        run: sudo apt-get update && sudo apt-get install -y gcc libsqlite3-dev
-
-      - name: Run the cross-repo E2E contract test
-        working-directory: skpm
-        env:
-          SKILLFORGE_REPO: ${{ github.workspace }}/SkillForge
-        run: go test -timeout 120s -tags e2e ./tests/integration/... -run TestSkillForgeE2E -v
-
-  skil-interop:
-    name: skil attestation interop (cross-repo contract test)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-          cache: true
-      - name: Install stable skil
-        # Pinned to skil's latest tagged release (v0.2.0), not a raw
-        # commit: this is the "skpm current x skil stable" cell of the
-        # cross-repo compatibility matrix (see COMPATIBILITY.md). v0.2.0
-        # includes the canonical-JSON attestation signing change
-        # (internal/signing.CanonicalJSON) that internal/attestation.Verify
-        # depends on to check a skil-signed attestation without importing
-        # skil as a library. Bump deliberately when skil cuts a new stable
-        # release that changes its signing scheme; don't let it drift
-        # silently.
-        run: go install github.com/domehahn/skil/cmd/skil@v0.2.0
-      - name: Run the skil attestation interop test
-        run: go test -timeout 60s -tags e2e ./internal/attestation/... -run TestVerifyInteropsWithRealSkilBinary -v

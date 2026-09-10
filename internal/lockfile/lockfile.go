@@ -42,6 +42,9 @@ func Read(path string) (*LockFile, error) {
 	if lf.Version == 0 {
 		lf.Version = currentVersion
 	}
+	if lf.Version > currentVersion {
+		return nil, fmt.Errorf("unsupported lockfile schema version %d (max supported: %d)", lf.Version, currentVersion)
+	}
 	return lf, nil
 }
 
@@ -70,6 +73,9 @@ func (lf *LockFile) Sort() {
 	sort.SliceStable(lf.Skills, func(i, j int) bool {
 		return lf.Skills[i].Name < lf.Skills[j].Name
 	})
+	for i := range lf.Skills {
+		sort.Strings(lf.Skills[i].InstalledTo)
+	}
 }
 
 func (lf *LockFile) Upsert(lock SkillLock) {

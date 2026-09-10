@@ -2,6 +2,7 @@ package cache_test
 
 import (
 	"io"
+	"os"
 	"strings"
 	"testing"
 
@@ -65,4 +66,21 @@ type errorReader struct{}
 
 func (e *errorReader) Read(p []byte) (int, error) {
 	return 0, io.ErrUnexpectedEOF
+}
+
+func TestCorruptedCacheAutoPurge(t *testing.T) {
+	dir := t.TempDir()
+	c := cache.New(dir)
+	validSHA := "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824" // sha256("hello")
+
+	require.NoError(t, c.Put(validSHA, strings.NewReader("hello")))
+	assert.True(t, c.Has(validSHA))
+
+	// Corrupt the cached file on disk
+	require.NoError(t, os.WriteFile(c.Path(validSHA), []byte("corrupted data"), 0o644))
+
+	// Has should detect mismatch and auto-purge
+	assert.False(t, c.Has(validSHA))
+	_, err := os.Stat(c.Path(validSHA))
+	assert.True(t, os.IsNotExist(err), "corrupted file must be purged")
 }

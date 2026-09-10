@@ -60,6 +60,19 @@ func (v *StructuredValidator) Validate(_ context.Context, dir string) (*Validati
 		Path:    dir,
 	}
 
+	if data, err := os.ReadFile(filepath.Join(dir, "skill.yaml")); err == nil {
+		sy, native, decodeErr := decodeSkillMetadata(data)
+		if native {
+			if decodeErr != nil {
+				res.addError("skill.yaml", decodeErr.Error(), "unsupported_native_schema")
+				res.Valid = false
+			} else {
+				v.validateNative(dir, sy, res)
+			}
+			return res, nil
+		}
+	}
+
 	info, err := os.Stat(filepath.Join(dir, "SKILL.md"))
 	if err != nil {
 		res.addError("SKILL.md", "file is missing", "missing_skill_md")

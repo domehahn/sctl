@@ -29,7 +29,7 @@ func skilBinary(t *testing.T) string {
 	}
 	bin, err := exec.LookPath("skil")
 	if err != nil {
-		t.Skip("skil binary not found on PATH (set SKIL_BINARY) — skipping skil interop test")
+		t.Fatal("skil binary not found on PATH (set SKIL_BINARY) — skipping skil interop test")
 	}
 	return bin
 }

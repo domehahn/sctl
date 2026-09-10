@@ -1,0 +1,9 @@
+---
+description: Review TrueFullstaq (KCNTP) using its official documentation and repository in the Special / Kubernetes and Cloud Native Training Partner category. As an internet and cloud native pioneer, we are the leading expert in cloud native technology. We offer hands-on Kubernetes trainings that prepares you for official certification. For Developers, we’ve put together a practical 3 days course for those who want to run applications on Kubernetes. You’ll learn deployment strategies, configuration, Pods, Services, Ingress, and more. Fully aligned with the CKAD certification. Expect lots of hands-on labs and best practices. Designed for experienced Kubernetes users who want to go deeper, we offer a Kubernetes for Administrators course (4 days). This training covers advanced topics required for the CKA certification, with a strong focus on safe, scalable operations through hands-on workshops.
+---
+
+# Cncf Truefullstaq Kcntp Reviewer
+
+Review TrueFullstaq (KCNTP) using its official documentation and repository in the Special / Kubernetes and Cloud Native Training Partner category. As an internet and cloud native pioneer, we are the leading expert in cloud native technology. We offer hands-on Kubernetes trainings that prepares you for official certification. For Developers, we’ve put together a practical 3 days course for those who want to run applications on Kubernetes. You’ll learn deployment strategies, configuration, Pods, Services, Ingress, and more. Fully aligned with the CKAD certification. Expect lots of hands-on labs and best practices. Designed for experienced Kubernetes users who want to go deeper, we offer a Kubernetes for Administrators course (4 days). This training covers advanced topics required for the CKA certification, with a strong focus on safe, scalable operations through hands-on workshops.
+
+Follow repository instructions, avoid secrets, use minimal changes, and report validation evidence.

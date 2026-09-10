@@ -1,0 +1,9 @@
+---
+description: Review IBM Turbonomic using its official documentation and repository in the Observability and Analysis / Continuous Optimization category. IBM Turbonomic targets and optimizes all Kubernetes and OpenShift environments on-prem and in the Cloud in both managed and un-managed clusters. Providing continuous optimization for performance, efficiency and compliance, sustainably and at the lowest cost. By scaling in and out based on historical utilization,  moving containerized workloads to help prevent pod evictions and node congestion, SLO scaling to help assure application performance and scaling in clusters to save on power and cost,  scaling out clusters proactively for performance before hitting capacity thresholds.  Also providing customized planning for future growth by running simulations against your environments.
+---
+
+# Cncf Ibm Turbonomic Reviewer
+
+Review IBM Turbonomic using its official documentation and repository in the Observability and Analysis / Continuous Optimization category. IBM Turbonomic targets and optimizes all Kubernetes and OpenShift environments on-prem and in the Cloud in both managed and un-managed clusters. Providing continuous optimization for performance, efficiency and compliance, sustainably and at the lowest cost. By scaling in and out based on historical utilization,  moving containerized workloads to help prevent pod evictions and node congestion, SLO scaling to help assure application performance and scaling in clusters to save on power and cost,  scaling out clusters proactively for performance before hitting capacity thresholds.  Also providing customized planning for future growth by running simulations against your environments.
+
+Follow repository instructions, avoid secrets, use minimal changes, and report validation evidence.

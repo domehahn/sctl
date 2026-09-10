@@ -1,0 +1,9 @@
+---
+description: Review MoreSec using its official documentation and repository in the Provisioning / Security &amp; Compliance category. Moresec Shangfu Cloud Native Protection Platform is a security protection model based on the concept of cloud native. In view of the characteristics  of cloud native application life-cycle, it involves in many stages of security protection, including R&amp;D construction, security testing, image  control, container deployment, container operation, etc. Shangfu also integrates security with development which means providing feedback of the  application security condition through correlating operation asset, and promoting the iteration and upgrade of application. Whereupon, a closed  loop of efficient cloud native application security risk is created, covering the whole stages of DevSecOps.
+---
+
+# Cncf Moresec Reviewer
+
+Review MoreSec using its official documentation and repository in the Provisioning / Security &amp; Compliance category. Moresec Shangfu Cloud Native Protection Platform is a security protection model based on the concept of cloud native. In view of the characteristics  of cloud native application life-cycle, it involves in many stages of security protection, including R&amp;D construction, security testing, image  control, container deployment, container operation, etc. Shangfu also integrates security with development which means providing feedback of the  application security condition through correlating operation asset, and promoting the iteration and upgrade of application. Whereupon, a closed  loop of efficient cloud native application security risk is created, covering the whole stages of DevSecOps.
+
+Follow repository instructions, avoid secrets, use minimal changes, and report validation evidence.

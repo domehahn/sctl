@@ -301,12 +301,12 @@ func printCapabilities(cmd *cobra.Command, caps *registry.RegistryCapabilities) 
 }
 
 func writeConfig(path string, cfg *config.Config) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
 	data, err := yaml.Marshal(cfg)
 	if err != nil {
 		return err
 	}
-	return writeAtomic(path, string(data))
+	return writeAtomicWithMode(path, string(data), 0o600)
 }

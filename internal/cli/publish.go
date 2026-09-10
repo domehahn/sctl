@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/domehahn/skpm/v2/internal/admission"
 	"github.com/domehahn/skpm/v2/internal/config"
 	"github.com/domehahn/skpm/v2/internal/registry"
 	"github.com/domehahn/skpm/v2/internal/skill"
@@ -16,12 +17,14 @@ import (
 
 func newPublishCmd() *cobra.Command {
 	var (
-		source      string
-		tagFormat   string
-		noTag       bool
-		noPush      bool
-		outputDir   string
-		noChangelog bool
+		source           string
+		tagFormat        string
+		noTag            bool
+		noPush           bool
+		outputDir        string
+		noChangelog      bool
+		requireAdmission bool
+		environment      string
 	)
 
 	cmd := &cobra.Command{
@@ -136,6 +139,38 @@ Use --dry-run to preview all steps without making changes.`,
 
 			// ── Step 5: Upload ─────────────────────────────────────────
 			printStep(cmd, "5/5", "Uploading to", src)
+
+			admClient := admission.NewClientFromEnv()
+			if requireAdmission || environment == "production" {
+				if admClient == nil || admClient.URL == "" {
+					return &AdmissionError{Message: "admission evidence required in production or --require-admission mode, but SKPM_ADMISSION_URL is not set"}
+				}
+			}
+
+			if admClient != nil {
+				req := admission.AdmissionRequest{
+					Name:          pkgResult.Name,
+					Version:       pkgResult.Version,
+					PackageDigest: pkgResult.SHA256,
+					Source:        src,
+					Registry:      src,
+					Action:        "publish",
+					Environment:   environment,
+				}
+				dec, err := admClient.Evaluate(cmd.Context(), req)
+				if err != nil {
+					if requireAdmission || environment == "production" || admClient.Enforce {
+						return &AdmissionError{Message: fmt.Sprintf("admission check failed for %s@%s: %v", pkgResult.Name, pkgResult.Version, err)}
+					}
+				}
+				if dec != nil && dec.Decision != admission.DecisionAllow {
+					if requireAdmission || environment == "production" || admClient.Enforce {
+						return &AdmissionError{Message: fmt.Sprintf("admission check rejected action publish for %s@%s: decision=%s (%s)", pkgResult.Name, pkgResult.Version, dec.Decision, dec.Reason)}
+					}
+					log.Warn().Str("skill", pkgResult.Name).Str("decision", string(dec.Decision)).Str("reason", dec.Reason).Msg("admission policy advisory")
+				}
+			}
+
 			reg, err := registry.New(src, cfg)
 			if err != nil {
 				return &UserError{Message: fmt.Sprintf("registry: %v", err)}
@@ -219,6 +254,8 @@ Use --dry-run to preview all steps without making changes.`,
 	cmd.Flags().BoolVar(&noPush, "no-push", false, "Skip pushing the git tag")
 	cmd.Flags().StringVar(&outputDir, "output-dir", "", "Directory for the intermediate ZIP (default: temp dir)")
 	cmd.Flags().BoolVar(&noChangelog, "no-changelog", false, "Skip automatic CHANGELOG.md placeholder entry")
+	cmd.Flags().BoolVar(&requireAdmission, "require-admission", false, "Require skgate admission decision ALLOW before publishing")
+	cmd.Flags().StringVar(&environment, "environment", "development", "Target environment for publish (e.g. development, production)")
 	return cmd
 }
 

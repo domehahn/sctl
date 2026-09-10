@@ -1,0 +1,89 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build multi-platform binaries
+        run: |
+          mkdir -p dist
+          VERSION_TAG=${GITHUB_REF#refs/tags/}
+          COMMIT_SHA=$(git rev-parse --short HEAD)
+          BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+          LDFLAGS="-X github.com/domehahn/skpm/v2/internal/cli.Version=${VERSION_TAG} -X github.com/domehahn/skpm/v2/internal/cli.Commit=${COMMIT_SHA} -X github.com/domehahn/skpm/v2/internal/cli.Date=${BUILD_DATE} -s -w"
+
+          GOOS=linux GOARCH=amd64 go build -trimpath -ldflags "$LDFLAGS" -o dist/skpm-linux-amd64 ./cmd/skpm
+          GOOS=linux GOARCH=arm64 go build -trimpath -ldflags "$LDFLAGS" -o dist/skpm-linux-arm64 ./cmd/skpm
+          GOOS=darwin GOARCH=amd64 go build -trimpath -ldflags "$LDFLAGS" -o dist/skpm-darwin-amd64 ./cmd/skpm
+          GOOS=darwin GOARCH=arm64 go build -trimpath -ldflags "$LDFLAGS" -o dist/skpm-darwin-arm64 ./cmd/skpm
+          GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "$LDFLAGS" -o dist/skpm-windows-amd64.exe ./cmd/skpm
+
+      - name: Generate Checksums
+        run: |
+          cd dist
+          sha256sum skpm-* > SHA256SUMS
+
+      - name: Generate SBOM (SPDX JSON)
+        run: |
+          cd dist
+          cat << 'EOF' > sbom.spdx.json
+          {
+            "spdxVersion": "SPDX-2.3",
+            "dataLicense": "CC0-1.0",
+            "SPDXID": "SPDXRef-DOCUMENT",
+            "name": "skpm-release-sbom",
+            "documentNamespace": "https://github.com/domehahn/skpm/spdxdoc/v2",
+            "creationInfo": {
+              "creators": ["Tool: skpm-build-pipeline"],
+              "created": "2026-09-09T00:00:00Z"
+            },
+            "packages": [
+              {
+                "name": "skpm",
+                "SPDXID": "SPDXRef-Package-skpm",
+                "versionInfo": "${GITHUB_REF#refs/tags/}",
+                "downloadLocation": "NOASSERTION",
+                "licenseConcluded": "MIT"
+              }
+            ]
+          }
+          EOF
+
+      - name: Attest Artifact Provenance (SLSA / Artifact Attestation)
+        uses: actions/attest-build-provenance@c0744595b99d28ee41265e6484364493e042564d # v1
+        with:
+          subject-path: 'dist/skpm-*'
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@c95fe0f2afb27670ad46714c6fea2be7c87c0a6b # v2
+        with:
+          files: |
+            dist/skpm-linux-amd64
+            dist/skpm-linux-arm64
+            dist/skpm-darwin-amd64
+            dist/skpm-darwin-arm64
+            dist/skpm-windows-amd64.exe
+            dist/SHA256SUMS
+            dist/sbom.spdx.json
+          draft: false
+          prerelease: false
+

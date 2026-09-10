@@ -1,0 +1,84 @@
+name: Toolchain compatibility
+on:
+  pull_request: {}
+  push:
+    branches: [main]
+  schedule:
+    - cron: '31 4 * * *'
+  workflow_dispatch: {}
+  workflow_call: {}
+permissions:
+  contents: read
+jobs:
+  compatibility:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - consumer: skpm
+            provider: skil
+            consumer_ref: main
+            provider_ref: main
+          - consumer: skpm
+            provider: skil
+            consumer_ref: main
+            provider_ref: v0.6.0
+          - consumer: skpm
+            provider: SkillForge
+            consumer_ref: main
+            provider_ref: main
+          - consumer: skpm
+            provider: SkillForge
+            consumer_ref: v2.3.0
+            provider_ref: main
+          - consumer: skpm
+            provider: skgate
+            consumer_ref: main
+            provider_ref: main
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: domehahn/${{ matrix.consumer }}
+          ref: ${{ matrix.consumer == 'skpm' && github.sha || matrix.consumer_ref }}
+          path: ${{ matrix.consumer }}
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: domehahn/${{ matrix.provider }}
+          ref: ${{ matrix.provider == 'skpm' && github.sha || matrix.provider_ref }}
+          path: ${{ matrix.provider }}
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: '${{ matrix.consumer }}/go.mod'
+          cache: false
+      - name: Record exact revisions
+        run: |
+          git -C "${{ matrix.consumer }}" rev-parse HEAD > consumer-revision.txt
+          git -C "${{ matrix.provider }}" rev-parse HEAD > provider-revision.txt
+      - name: Build and exercise real producer and consumer
+        env:
+          CONSUMER: ${{ matrix.consumer }}
+          PROVIDER: ${{ matrix.provider }}
+          SKIL_BINARY: ${{ github.workspace }}/bin/skil
+          SKILLFORGE_REPO: ${{ github.workspace }}/SkillForge
+        run: |
+          set -euo pipefail
+          mkdir -p bin
+          if [ "$PROVIDER" = skil ]; then
+            (cd skil && go build -trimpath -o "$SKIL_BINARY" ./cmd/skil)
+            (cd skpm && go test -count=1 -timeout 2m -tags e2e ./internal/attestation/... -run TestVerifyInteropsWithRealSkilBinary -v)
+          elif [ "$PROVIDER" = skgate ]; then
+            (cd skpm && go test -count=1 -timeout 2m ./tests/unit/cli/... -run TestAdmission -v)
+          else
+            (cd SkillForge/skill-registry && go build ./cmd/skill-registry)
+            (cd skpm && go test -count=1 -timeout 3m -tags e2e ./tests/integration/... -run TestSkillForgeE2E -v)
+          fi
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: revisions-${{ matrix.consumer }}-${{ matrix.provider }}-${{ matrix.consumer_ref }}-${{ matrix.provider_ref }}
+          path: '*-revision.txt'
+          if-no-files-found: error

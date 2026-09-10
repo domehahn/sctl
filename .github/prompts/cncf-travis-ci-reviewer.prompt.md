@@ -1,0 +1,9 @@
+---
+description: Review Travis CI using its official documentation and repository in the App Definition and Development / Continuous Integration &amp; Delivery category.
+---
+
+# Cncf Travis Ci Reviewer
+
+Review Travis CI using its official documentation and repository in the App Definition and Development / Continuous Integration &amp; Delivery category.
+
+Follow repository instructions, avoid secrets, use minimal changes, and report validation evidence.
