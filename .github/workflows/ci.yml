@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request: {}
+  workflow_dispatch: {}
 
 permissions:
   contents: read
@@ -37,7 +38,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: golang/govulncheck-action@b0d1e7c9f80f124619d7b420067332c02c63faaa # v1
+      - uses: golang/govulncheck-action@v1
         with:
           go-version-file: go.mod
           go-package: ./...
