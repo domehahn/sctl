@@ -22,18 +22,18 @@ const (
 )
 
 type AdmissionRequest struct {
-	Name               string            `json:"name"`
-	Version            string            `json:"version"`
-	PackageDigest      string            `json:"package_digest,omitempty"`
-	ArtifactDigest     string            `json:"artifact_digest,omitempty"`
-	Source             string            `json:"source,omitempty"`
-	Registry           string            `json:"registry,omitempty"`
-	Action             string            `json:"action"` // "publish" or "install"
-	Environment        string            `json:"environment,omitempty"`
-	LockfileDigest     string            `json:"lockfile_digest,omitempty"`
-	Attestations       []string          `json:"attestations,omitempty"`
-	Timestamp          string            `json:"timestamp,omitempty"`
-	Metadata           map[string]string `json:"metadata,omitempty"`
+	Name           string            `json:"name"`
+	Version        string            `json:"version"`
+	PackageDigest  string            `json:"package_digest,omitempty"`
+	ArtifactDigest string            `json:"artifact_digest,omitempty"`
+	Source         string            `json:"source,omitempty"`
+	Registry       string            `json:"registry,omitempty"`
+	Action         string            `json:"action"` // "publish" or "install"
+	Environment    string            `json:"environment,omitempty"`
+	LockfileDigest string            `json:"lockfile_digest,omitempty"`
+	Attestations   []string          `json:"attestations,omitempty"`
+	Timestamp      string            `json:"timestamp,omitempty"`
+	Metadata       map[string]string `json:"metadata,omitempty"`
 }
 
 type AdmissionDecision struct {
